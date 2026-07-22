@@ -1,26 +1,94 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base — paleta inicial: branco + mint + neutros */
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --foreground: #14161a;
+  --muted: #9a9ea7;
+  --line: #eef0f3;
+
+  /* Superfícies leves — mint */
+  --surface: #7dffb3;
+  --surface-soft: #eefff5;
+
+  /* Estrutura forte */
+  --brand: #14161a;
+
+  /* Acentos de ação / status */
+  --orange: #7dffb3;
+  --pink: #34c985;
+  --yellow: #34c985;
+  --blue: #34c985;
+
+  /* Legado semântico */
+  --accent: #7dffb3;
+  --accent-soft: #eefff5;
+  --accent-deep: #34c985;
+  --dark: #16181d;
+  --bar-muted: #edeff2;
+  --danger: #f4837a;
+
+  --shadow-soft: 0 1px 2px rgba(20, 22, 26, 0.03);
+  --radius-card: 24px;
+  --radius-pill: 9999px;
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-brand: var(--brand);
+  --color-orange: var(--orange);
+  --color-pink: var(--pink);
+  --color-yellow: var(--yellow);
+  --color-blue: var(--blue);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-deep: var(--accent-deep);
+  --color-dark: var(--dark);
+  --color-bar-muted: var(--bar-muted);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-plus-jakarta);
+  --shadow-soft: var(--shadow-soft);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
+  min-height: 100%;
+  background: var(--bg);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--surface);
+  color: var(--brand);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.inner {
+  background: color-mix(in srgb, var(--bg) 70%, white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
 }
