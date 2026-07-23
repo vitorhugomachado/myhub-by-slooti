@@ -2,12 +2,26 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { toCharge } from "@/lib/mappers";
 import type { FinanceCharge } from "@/lib/finance";
+import { hasFinanceAccess } from "@/lib/plans";
 import { getSessionUser } from "@/lib/session";
+
+function financeForbidden() {
+  return NextResponse.json(
+    {
+      error: "finance_plan_required",
+      message: "O módulo financeiro está disponível no Plano Pro.",
+    },
+    { status: 403 },
+  );
+}
 
 export async function GET() {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!hasFinanceAccess(user.plan)) {
+    return financeForbidden();
   }
   const rows = await prisma.financeCharge.findMany({
     where: { userId: user.id },
@@ -20,6 +34,9 @@ export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (!hasFinanceAccess(user.plan)) {
+    return financeForbidden();
   }
 
   const body = (await request.json()) as { entries?: FinanceCharge[] };

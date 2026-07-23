@@ -15,13 +15,15 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { PsychologistProfileForm } from "@/components/profile/PsychologistProfileForm";
 import { useProfile } from "@/hooks/useProfile";
-import { logout } from "@/lib/auth";
+import { fetchSessionUser, getCachedUser, logout } from "@/lib/auth";
 import { navItems } from "@/lib/mock-data";
+import { hasFinanceAccess } from "@/lib/plans";
 import { profileDisplayName } from "@/lib/profile";
 
 function isActivePath(pathname: string, href: string) {
@@ -41,14 +43,29 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showFinance, setShowFinance] = useState(false);
 
   const displayName = profileDisplayName(profile);
+  const visibleNav = useMemo(
+    () => navItems.filter((item) => item.href !== "/financeiro" || showFinance),
+    [showFinance],
+  );
+
+  useEffect(() => {
+    const cached = getCachedUser();
+    if (cached) {
+      setShowFinance(hasFinanceAccess(cached.plan));
+    }
+    void fetchSessionUser().then((user) => {
+      setShowFinance(hasFinanceAccess(user?.plan));
+    });
+  }, []);
 
   const updatePill = useCallback(() => {
     const nav = navRef.current;
     if (!nav) return;
 
-    const activeIndex = navItems.findIndex((item) =>
+    const activeIndex = visibleNav.findIndex((item) =>
       isActivePath(pathname, item.href),
     );
     const el = itemRefs.current[activeIndex];
@@ -62,7 +79,7 @@ export function Header() {
       width: el.offsetWidth,
       ready: true,
     });
-  }, [pathname]);
+  }, [pathname, visibleNav]);
 
   useLayoutEffect(() => {
     updatePill();
@@ -91,7 +108,7 @@ export function Header() {
   useEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
-    const activeIndex = navItems.findIndex((item) =>
+    const activeIndex = visibleNav.findIndex((item) =>
       isActivePath(pathname, item.href),
     );
     const el = itemRefs.current[activeIndex];
@@ -101,7 +118,7 @@ export function Header() {
       inline: "center",
       block: "nearest",
     });
-  }, [pathname]);
+  }, [pathname, visibleNav]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -167,7 +184,7 @@ export function Header() {
             }}
           />
 
-          {navItems.map((item, index) => {
+          {visibleNav.map((item, index) => {
             const active = isActivePath(pathname, item.href);
             return (
               <Link

@@ -14,13 +14,13 @@ import {
   isAppointmentPaid,
   markAppointmentReceived,
   saveFinance,
-  seedFinance,
   upsertCharge,
   type FinanceCharge,
   type FinanceMethod,
 } from "@/lib/finance";
 import {
   ensurePatientByName,
+  loadPatients,
   PATIENTS_EVENT,
   savePatients,
   type Patient,
@@ -34,13 +34,21 @@ async function fetchFinance(): Promise<{
     fetch("/api/finance", { credentials: "include" }),
     fetch("/api/patients", { credentials: "include" }),
   ]);
-  if (!financeRes.ok || !patientsRes.ok) {
+  if (!patientsRes.ok) {
+    throw new Error("finance_fetch_failed");
+  }
+  const patients = (await patientsRes.json()) as { patients: Patient[] };
+  savePatients(patients.patients);
+
+  if (financeRes.status === 403) {
+    saveFinance([]);
+    return { entries: [], patients: patients.patients };
+  }
+  if (!financeRes.ok) {
     throw new Error("finance_fetch_failed");
   }
   const finance = (await financeRes.json()) as { entries: FinanceCharge[] };
-  const patients = (await patientsRes.json()) as { patients: Patient[] };
   saveFinance(finance.entries);
-  savePatients(patients.patients);
   return { entries: finance.entries, patients: patients.patients };
 }
 
@@ -54,10 +62,8 @@ async function persistFinance(entries: FinanceCharge[]) {
   window.dispatchEvent(new Event(FINANCE_EVENT));
 }
 
-async function persistPatientsFromLocal() {
-  // ensurePatientSaved still writes localStorage; sync full list to API
-  const { loadPatients } = await import("@/lib/patients");
-  const patients = loadPatients();
+async function persistPatients(patients: Patient[]) {
+  savePatients(patients);
   await fetch("/api/patients", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -67,8 +73,14 @@ async function persistPatientsFromLocal() {
   window.dispatchEvent(new Event(PATIENTS_EVENT));
 }
 
+function syncPatientList(nextPatients: Patient[]) {
+  savePatients(nextPatients);
+  void persistPatients(nextPatients);
+  return nextPatients;
+}
+
 export function useFinance() {
-  const [entries, setEntries] = useState<FinanceCharge[]>(seedFinance);
+  const [entries, setEntries] = useState<FinanceCharge[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
@@ -100,21 +112,22 @@ export function useFinance() {
     void persistFinance(next);
   }, []);
 
-  const markPaid = useCallback(
-    (id: string) => {
-      setEntries((prev) => {
-        const previous = prev.find((e) => e.id === id);
-        const next = prev.map((e) =>
-          e.id === id ? { ...e, status: "pago" as const } : e,
+  const markPaid = useCallback((id: string) => {
+    setEntries((prev) => {
+      const previous = prev.find((e) => e.id === id);
+      const next = prev.map((e) =>
+        e.id === id ? { ...e, status: "pago" as const } : e,
+      );
+      const updated = next.find((e) => e.id === id);
+      if (updated) {
+        setPatients((plist) =>
+          syncPatientList(applyChargeEditSideEffects(plist, updated, previous)),
         );
-        const updated = next.find((e) => e.id === id);
-        if (updated) applyChargeEditSideEffects(updated, previous);
-        void persistFinance(next).then(() => persistPatientsFromLocal());
-        return next;
-      });
-    },
-    [],
-  );
+      }
+      void persistFinance(next);
+      return next;
+    });
+  }, []);
 
   const receiveAppointment = useCallback(
     (
@@ -137,27 +150,34 @@ export function useFinance() {
           patient,
           defaults,
         );
-        if (result.patient) ensurePatientSaved(result.patient);
+        let nextPatients = loadPatients();
+        if (result.patient) {
+          ensurePatientSaved(result.patient);
+          nextPatients = loadPatients();
+        }
         const updated = findEntryForAppointment(result.entries, appointment.id, {
           date: appointment.date,
           patientName: appointment.patient,
         });
         if (updated) {
           if (previous) {
-            applyChargeEditSideEffects(updated, previous);
+            nextPatients = applyChargeEditSideEffects(
+              nextPatients,
+              updated,
+              previous,
+            );
           } else if (
             updated.kind === "renovacao_pacote" &&
             updated.status === "pago"
           ) {
-            applyChargeEditSideEffects(updated, {
+            nextPatients = applyChargeEditSideEffects(nextPatients, updated, {
               ...updated,
               status: "pendente",
             });
           }
         }
-        void persistFinance(result.entries).then(() =>
-          persistPatientsFromLocal(),
-        );
+        setPatients(syncPatientList(nextPatients));
+        void persistFinance(result.entries);
         return result.entries;
       });
     },
@@ -168,8 +188,10 @@ export function useFinance() {
     setEntries((prev) => {
       const previous = prev.find((e) => e.id === charge.id);
       const next = upsertCharge(prev, charge);
-      applyChargeEditSideEffects(charge, previous);
-      void persistFinance(next).then(() => persistPatientsFromLocal());
+      setPatients((plist) =>
+        syncPatientList(applyChargeEditSideEffects(plist, charge, previous)),
+      );
+      void persistFinance(next);
       return next;
     });
   }, []);
@@ -177,15 +199,18 @@ export function useFinance() {
   const createCharge = useCallback((charge: FinanceCharge) => {
     setEntries((prev) => {
       const next = [...prev, charge];
-      if (charge.kind === "consumo_pacote") {
-        applyChargeEditSideEffects(charge, {
-          ...charge,
-          kind: "sessao_avulsa",
-        });
-      } else {
-        applyChargeEditSideEffects(charge, undefined);
-      }
-      void persistFinance(next).then(() => persistPatientsFromLocal());
+      setPatients((plist) =>
+        syncPatientList(
+          applyChargeEditSideEffects(
+            plist,
+            charge,
+            charge.kind === "consumo_pacote"
+              ? { ...charge, kind: "sessao_avulsa" }
+              : undefined,
+          ),
+        ),
+      );
+      void persistFinance(next);
       return next;
     });
   }, []);
@@ -194,8 +219,12 @@ export function useFinance() {
     setEntries((prev) => {
       const removed = prev.find((e) => e.id === chargeId);
       const next = deleteCharge(prev, chargeId);
-      if (removed) applyChargeDeleteSideEffects(removed);
-      void persistFinance(next).then(() => persistPatientsFromLocal());
+      if (removed) {
+        setPatients((plist) =>
+          syncPatientList(applyChargeDeleteSideEffects(plist, removed)),
+        );
+      }
+      void persistFinance(next);
       return next;
     });
   }, []);
@@ -208,10 +237,11 @@ export function useFinance() {
       });
     setEntries((prev) => {
       const result = applySessionBilling(prev, appointment, patient);
-      if (result.patient) ensurePatientSaved(result.patient);
-      void persistFinance(result.entries).then(() =>
-        persistPatientsFromLocal(),
-      );
+      if (result.patient) {
+        ensurePatientSaved(result.patient);
+        setPatients(syncPatientList(loadPatients()));
+      }
+      void persistFinance(result.entries);
       return result.entries;
     });
   }, []);

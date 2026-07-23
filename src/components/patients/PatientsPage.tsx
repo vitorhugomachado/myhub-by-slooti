@@ -19,13 +19,9 @@ import { Header } from "@/components/dashboard/Header";
 import { PatientForm } from "@/components/patients/PatientForm";
 import { BillingBadge } from "@/components/shared/BillingBadge";
 import { usePatients } from "@/hooks/usePatients";
-import {
-  loadPendencies,
-  pendencyHref,
-  pendencyLabel,
-  PENDENCIES_EVENT,
-  type Pendency,
-} from "@/lib/pendencies";
+import { usePendencies } from "@/hooks/usePendencies";
+import { fetchSessionUser, getCachedUser } from "@/lib/auth";
+import { pendencyHref, pendencyLabel } from "@/lib/pendencies";
 import {
   emptyPatient,
   ensurePatientByName,
@@ -33,12 +29,18 @@ import {
   statusLabel,
   type Patient,
 } from "@/lib/patients";
+import {
+  FREE_PATIENT_LIMIT,
+  canAddPatient,
+  hasFinanceAccess,
+} from "@/lib/plans";
 
 type ViewMode = "cards" | "list";
 
 export function PatientsPage() {
   const searchParams = useSearchParams();
   const { patients, setPatients, hydrated } = usePatients();
+  const { pendencies } = usePendencies();
   const [nameFilter, setNameFilter] = useState("");
   const [startSort, setStartSort] = useState<"recent" | "oldest">("recent");
   const [statusFilter, setStatusFilter] = useState<"todos" | Patient["status"]>(
@@ -46,20 +48,18 @@ export function PatientsPage() {
   );
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
-  const [pendencies, setPendencies] = useState<Pendency[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [plan, setPlan] = useState(getCachedUser()?.plan ?? "");
+  const [limitError, setLimitError] = useState("");
   const deeplinkHandled = useRef(false);
 
   useEffect(() => {
-    const refresh = () => setPendencies(loadPendencies());
-    refresh();
-    window.addEventListener(PENDENCIES_EVENT, refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener(PENDENCIES_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
-    };
+    void fetchSessionUser().then((user) => {
+      if (user) setPlan(user.plan);
+    });
   }, []);
+
+  const atPatientLimit = !canAddPatient(plan, patients.length);
 
   useEffect(() => {
     if (!hydrated || deeplinkHandled.current) return;
@@ -122,18 +122,26 @@ export function PatientsPage() {
   }
 
   function openCreate() {
+    if (atPatientLimit) {
+      setLimitError(
+        `Plano gratuito: limite de ${FREE_PATIENT_LIMIT} pacientes. Faça upgrade para o Pro.`,
+      );
+      return;
+    }
+    setLimitError("");
     setEditing(null);
     setFormOpen(true);
   }
 
   function openEdit(patient: Patient) {
+    setLimitError("");
     setEditing(patient);
     setFormOpen(true);
   }
 
-  function handleSave(data: ReturnType<typeof emptyPatient>, id?: string) {
+  async function handleSave(data: ReturnType<typeof emptyPatient>, id?: string) {
     if (id) {
-      setPatients((prev) =>
+      await setPatients((prev) =>
         prev.map((p) =>
           p.id === id
             ? {
@@ -146,13 +154,20 @@ export function PatientsPage() {
       return;
     }
 
+    if (!canAddPatient(plan, patients.length)) {
+      setLimitError(
+        `Plano gratuito: limite de ${FREE_PATIENT_LIMIT} pacientes. Faça upgrade para o Pro.`,
+      );
+      throw new Error("patient_limit");
+    }
+
     const newPatient: Patient = {
       ...data,
       id: `p-${Date.now()}`,
       createdAt: new Date().toISOString().slice(0, 10),
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.fullName)}&background=7dffb3&color=14161a&bold=true`,
     };
-    setPatients((prev) => [newPatient, ...prev]);
+    await setPatients((prev) => [newPatient, ...prev]);
   }
 
   const counts = {
@@ -174,17 +189,39 @@ export function PatientsPage() {
             </h1>
             <p className="mt-1 text-[13px] text-muted">
               Cadastro completo, busca e acompanhamento clínico
+              {plan === "free"
+                ? ` · ${patients.length}/${FREE_PATIENT_LIMIT} no plano gratuito`
+                : ""}
             </p>
           </div>
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-orange px-5 py-3 text-[13px] font-bold text-brand"
+            disabled={atPatientLimit}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-orange px-5 py-3 text-[13px] font-bold text-brand disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="size-4" />
             Novo paciente
           </button>
         </div>
+
+        {limitError && (
+          <div className="rounded-2xl border border-orange/30 bg-orange/10 px-4 py-3 text-[13px] text-brand">
+            {limitError}{" "}
+            <Link href="/onboarding" className="font-bold underline">
+              Ver planos
+            </Link>
+          </div>
+        )}
+
+        {!hasFinanceAccess(plan) && plan === "free" && (
+          <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
+            No plano gratuito o módulo Financeiro fica bloqueado.{" "}
+            <Link href="/onboarding" className="font-semibold text-brand underline">
+              Conhecer o Pro
+            </Link>
+          </div>
+        )}
 
         <div className="card flex flex-col gap-3 p-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto]">

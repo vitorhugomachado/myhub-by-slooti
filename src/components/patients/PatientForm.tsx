@@ -1,13 +1,13 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
-import {
-  loadPendencies,
-  pendencyLabel,
-  PENDENCIES_EVENT,
-  type Pendency,
-} from "@/lib/pendencies";
+import { useEffect, useMemo, useState } from "react";
+import { BirthDateField } from "@/components/shared/BirthDateField";
+import { useCepAutofill } from "@/hooks/useCepAutofill";
+import { usePendencies } from "@/hooks/usePendencies";
+import { formatZip } from "@/lib/address";
+import { validatePatient } from "@/lib/patient-validation";
+import { pendencyLabel } from "@/lib/pendencies";
 import {
   emptyPatient,
   type BillingMode,
@@ -16,6 +16,7 @@ import {
   type SessionMode,
   type PatientStatus,
 } from "@/lib/patients";
+import { BRAZIL_UFS, formatCpf, formatPhone } from "@/lib/profile";
 
 type FormState = ReturnType<typeof emptyPatient>;
 
@@ -27,6 +28,12 @@ const modes: SessionMode[] = ["Online", "Presencial", "Híbrido"];
 const payments: PaymentMethod[] = ["Pix", "Cartão", "Dinheiro", "Convênio", "Transferência"];
 const statuses: PatientStatus[] = ["ativo", "pausado", "alta"];
 
+const inputClass =
+  "w-full rounded-xl border border-line bg-bg px-3.5 py-3 text-[13px] leading-normal text-brand outline-none placeholder:text-muted focus:border-surface";
+
+const inputErrorClass =
+  "w-full rounded-xl border border-danger/50 bg-bg px-3.5 py-3 text-[13px] leading-normal text-brand outline-none placeholder:text-muted focus:border-danger";
+
 export function PatientForm({
   initial,
   onClose,
@@ -34,11 +41,14 @@ export function PatientForm({
 }: {
   initial?: Patient | null;
   onClose: () => void;
-  onSave: (data: FormState, id?: string) => void;
+  onSave: (data: FormState, id?: string) => void | Promise<void>;
 }) {
   const [form, setForm] = useState<FormState>(emptyPatient());
   const [visible, setVisible] = useState(false);
   const [section, setSection] = useState<"dados" | "clinico" | "atendimento">("dados");
+  const [tried, setTried] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     if (initial) {
@@ -47,6 +57,8 @@ export function PatientForm({
     } else {
       setForm(emptyPatient());
     }
+    setTried(false);
+    setSaveError("");
     const frame = requestAnimationFrame(() => setVisible(true));
     document.body.style.overflow = "hidden";
     return () => {
@@ -55,8 +67,25 @@ export function PatientForm({
     };
   }, [initial]);
 
+  const cep = useCepAutofill(form.zip, (address) => {
+    setForm((prev) => ({
+      ...prev,
+      zip: address.zip,
+      street: address.street || prev.street,
+      neighborhood: address.neighborhood || prev.neighborhood,
+      city: address.city || prev.city,
+      state: address.state || prev.state,
+    }));
+  });
+
+  const validation = useMemo(() => validatePatient(form), [form]);
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function err(key: keyof FormState) {
+    return tried ? validation.errors[key] : undefined;
   }
 
   function handleClose() {
@@ -64,19 +93,43 @@ export function PatientForm({
     window.setTimeout(onClose, 200);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.fullName.trim()) return;
-    if (!form.lgpdConsent) {
-      alert("É necessário o consentimento LGPD para salvar o cadastro.");
+    setTried(true);
+    setSaveError("");
+    const result = validatePatient(form);
+    if (!result.ok) {
+      if (
+        result.errors.fullName ||
+        result.errors.email ||
+        result.errors.phone ||
+        result.errors.cpf ||
+        result.errors.birthDate ||
+        result.errors.zip ||
+        result.errors.guardianName ||
+        result.errors.guardianCpf
+      ) {
+        setSection("dados");
+      } else if (result.errors.lgpdConsent) {
+        setSection("atendimento");
+      }
       return;
     }
-    onSave(form, initial?.id);
-    handleClose();
-  }
 
-  const inputClass =
-    "w-full rounded-xl border border-line bg-bg px-3.5 py-3 text-[13px] leading-normal text-brand outline-none placeholder:text-muted focus:border-surface";
+    setSaving(true);
+    try {
+      await onSave(form, initial?.id);
+      handleClose();
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o paciente. Tente novamente.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
@@ -90,7 +143,7 @@ export function PatientForm({
       />
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => void handleSubmit(e)}
         className={`relative z-10 flex max-h-[min(94vh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-line bg-card shadow-[0_24px_80px_rgba(20,22,26,0.18)] transition-all duration-300 ease-out sm:rounded-[28px] ${
           visible
             ? "translate-y-0 scale-100 opacity-100"
@@ -144,10 +197,10 @@ export function PatientForm({
           {section === "dados" && (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Nome completo *" className="sm:col-span-2">
+                <Field label="Nome completo *" error={err("fullName")} className="sm:col-span-2">
                   <input
                     required
-                    className={inputClass}
+                    className={err("fullName") ? inputErrorClass : inputClass}
                     value={form.fullName}
                     onChange={(e) => set("fullName", e.target.value)}
                     placeholder="Nome civil"
@@ -161,20 +214,20 @@ export function PatientForm({
                     placeholder="Se houver"
                   />
                 </Field>
-                <Field label="Data de nascimento">
-                  <input
-                    type="date"
-                    className={inputClass}
+                <Field label="Data de nascimento" error={err("birthDate")}>
+                  <BirthDateField
                     value={form.birthDate}
-                    onChange={(e) => set("birthDate", e.target.value)}
+                    onChange={(iso) => set("birthDate", iso)}
+                    error={Boolean(err("birthDate"))}
                   />
                 </Field>
-                <Field label="CPF">
+                <Field label="CPF" error={err("cpf")}>
                   <input
-                    className={inputClass}
+                    className={err("cpf") ? inputErrorClass : inputClass}
                     value={form.cpf}
-                    onChange={(e) => set("cpf", e.target.value)}
+                    onChange={(e) => set("cpf", formatCpf(e.target.value))}
                     placeholder="000.000.000-00"
+                    inputMode="numeric"
                   />
                 </Field>
                 <Field label="RG">
@@ -216,39 +269,53 @@ export function PatientForm({
 
               <p className="pt-1 text-[12px] font-bold text-brand">Contato</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="E-mail">
+                <Field label="E-mail" error={err("email")}>
                   <input
                     type="email"
-                    className={inputClass}
+                    className={err("email") ? inputErrorClass : inputClass}
                     value={form.email}
                     onChange={(e) => set("email", e.target.value)}
                   />
                 </Field>
-                <Field label="Telefone">
+                <Field label="Telefone" error={err("phone")}>
                   <input
-                    className={inputClass}
+                    className={err("phone") ? inputErrorClass : inputClass}
                     value={form.phone}
-                    onChange={(e) => set("phone", e.target.value)}
+                    onChange={(e) => set("phone", formatPhone(e.target.value))}
                     placeholder="(11) 90000-0000"
+                    inputMode="tel"
                   />
                 </Field>
                 <Field label="WhatsApp" className="sm:col-span-2">
                   <input
                     className={inputClass}
                     value={form.whatsapp}
-                    onChange={(e) => set("whatsapp", e.target.value)}
+                    onChange={(e) => set("whatsapp", formatPhone(e.target.value))}
+                    placeholder="(11) 90000-0000"
+                    inputMode="tel"
                   />
                 </Field>
               </div>
 
               <p className="pt-1 text-[12px] font-bold text-brand">Endereço</p>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="CEP">
+                <Field label="CEP" error={err("zip")}>
                   <input
-                    className={inputClass}
+                    className={err("zip") ? inputErrorClass : inputClass}
                     value={form.zip}
-                    onChange={(e) => set("zip", e.target.value)}
+                    onChange={(e) => set("zip", formatZip(e.target.value))}
+                    placeholder="00000-000"
+                    inputMode="numeric"
                   />
+                  {cep.message ? (
+                    <span
+                      className={`mt-1 block text-[11px] ${
+                        cep.status === "error" ? "text-danger" : "text-muted"
+                      }`}
+                    >
+                      {cep.message}
+                    </span>
+                  ) : null}
                 </Field>
                 <Field label="Rua" className="sm:col-span-2">
                   <input
@@ -286,13 +353,18 @@ export function PatientForm({
                   />
                 </Field>
                 <Field label="UF">
-                  <input
+                  <select
                     className={inputClass}
                     value={form.state}
                     onChange={(e) => set("state", e.target.value)}
-                    maxLength={2}
-                    placeholder="SP"
-                  />
+                  >
+                    <option value="">UF</option>
+                    {BRAZIL_UFS.map((uf) => (
+                      <option key={uf} value={uf}>
+                        {uf}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               </div>
 
@@ -309,7 +381,10 @@ export function PatientForm({
                   <input
                     className={inputClass}
                     value={form.emergencyPhone}
-                    onChange={(e) => set("emergencyPhone", e.target.value)}
+                    onChange={(e) =>
+                      set("emergencyPhone", formatPhone(e.target.value))
+                    }
+                    inputMode="tel"
                   />
                 </Field>
                 <Field label="Parentesco">
@@ -333,25 +408,35 @@ export function PatientForm({
 
               {form.isMinor && (
                 <div className="grid gap-3 rounded-2xl border border-line bg-bg p-3 sm:grid-cols-3">
-                  <Field label="Responsável">
+                  <Field label="Responsável *" error={err("guardianName")}>
                     <input
-                      className={inputClass}
+                      className={
+                        err("guardianName") ? inputErrorClass : inputClass
+                      }
                       value={form.guardianName}
                       onChange={(e) => set("guardianName", e.target.value)}
                     />
                   </Field>
-                  <Field label="CPF do responsável">
+                  <Field label="CPF do responsável" error={err("guardianCpf")}>
                     <input
-                      className={inputClass}
+                      className={
+                        err("guardianCpf") ? inputErrorClass : inputClass
+                      }
                       value={form.guardianCpf}
-                      onChange={(e) => set("guardianCpf", e.target.value)}
+                      onChange={(e) =>
+                        set("guardianCpf", formatCpf(e.target.value))
+                      }
+                      inputMode="numeric"
                     />
                   </Field>
                   <Field label="Telefone do responsável">
                     <input
                       className={inputClass}
                       value={form.guardianPhone}
-                      onChange={(e) => set("guardianPhone", e.target.value)}
+                      onChange={(e) =>
+                        set("guardianPhone", formatPhone(e.target.value))
+                      }
+                      inputMode="tel"
                     />
                   </Field>
                 </div>
@@ -582,7 +667,13 @@ export function PatientForm({
                 </>
               )}
 
-              <label className="flex items-start gap-2.5 rounded-2xl border border-line bg-bg p-3 text-[13px] text-brand sm:col-span-2">
+              <label
+                className={`flex items-start gap-2.5 rounded-2xl border p-3 text-[13px] text-brand sm:col-span-2 ${
+                  err("lgpdConsent")
+                    ? "border-danger/50 bg-danger/5"
+                    : "border-line bg-bg"
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={form.lgpdConsent}
@@ -595,6 +686,11 @@ export function PatientForm({
                     O paciente (ou responsável) autoriza o tratamento dos dados pessoais e
                     sensíveis de saúde para fins de atendimento psicológico, conforme a LGPD.
                   </span>
+                  {err("lgpdConsent") ? (
+                    <span className="mt-1 block text-[11px] text-danger">
+                      {err("lgpdConsent")}
+                    </span>
+                  ) : null}
                 </span>
               </label>
             </div>
@@ -606,20 +702,36 @@ export function PatientForm({
           <PatientPendenciesBanner patient={initial} />
         )}
 
-        <div className="shrink-0 flex flex-col-reverse gap-2 border-t border-line bg-card px-5 py-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-full border border-line bg-bg px-5 py-3 text-[13px] font-semibold text-brand"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="rounded-full bg-orange px-5 py-3 text-[13px] font-bold text-brand"
-          >
-            {initial ? "Salvar alterações" : "Cadastrar paciente"}
-          </button>
+        <div className="shrink-0 flex flex-col gap-2 border-t border-line bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[11px] text-muted">
+            {saveError ? (
+              <span className="text-danger">{saveError}</span>
+            ) : tried && !validation.ok ? (
+              "Revise os campos marcados para continuar."
+            ) : (
+              "* Nome e consentimento LGPD são obrigatórios"
+            )}
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-full border border-line bg-bg px-5 py-3 text-[13px] font-semibold text-brand"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-full bg-orange px-5 py-3 text-[13px] font-bold text-brand disabled:opacity-60"
+            >
+              {saving
+                ? "Salvando…"
+                : initial
+                  ? "Salvar alterações"
+                  : "Cadastrar paciente"}
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -627,23 +739,12 @@ export function PatientForm({
 }
 
 function PatientPendenciesBanner({ patient }: { patient: Patient }) {
-  const [items, setItems] = useState<Pendency[]>([]);
-
-  useEffect(() => {
-    const refresh = () => {
-      setItems(
-        loadPendencies().filter(
-          (p) =>
-            p.status === "pending" &&
-            (p.patientId === patient.id ||
-              p.patientName.toLowerCase() === patient.fullName.toLowerCase()),
-        ),
-      );
-    };
-    refresh();
-    window.addEventListener(PENDENCIES_EVENT, refresh);
-    return () => window.removeEventListener(PENDENCIES_EVENT, refresh);
-  }, [patient.id, patient.fullName]);
+  const { pending } = usePendencies();
+  const items = pending.filter(
+    (p) =>
+      p.patientId === patient.id ||
+      p.patientName.toLowerCase() === patient.fullName.toLowerCase(),
+  );
 
   if (!items.length) return null;
 
@@ -668,10 +769,12 @@ function PatientPendenciesBanner({ patient }: { patient: Patient }) {
 
 function Field({
   label,
+  error,
   children,
   className = "",
 }: {
   label: string;
+  error?: string;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -681,6 +784,9 @@ function Field({
         {label}
       </span>
       {children}
+      {error ? (
+        <span className="mt-1 block text-[11px] text-danger">{error}</span>
+      ) : null}
     </label>
   );
 }

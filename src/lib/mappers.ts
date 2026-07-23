@@ -139,34 +139,6 @@ export function toCharge(c: {
   };
 }
 
-export function toAppointment(a: {
-  id: number;
-  date: string;
-  start: string;
-  end: string;
-  patient: string;
-  type: string;
-  mode: string;
-  status: string;
-  avatar: string;
-}): ScheduleItem {
-  return {
-    id: a.id,
-    date: a.date,
-    start: a.start,
-    end: a.end,
-    patient: a.patient,
-    type: a.type,
-    mode: a.mode as ScheduleItem["mode"],
-    status: a.status as ScheduleItem["status"],
-    avatar: a.avatar,
-  };
-}
-
-export function toProfile(data: unknown): PsychologistProfile {
-  return data as PsychologistProfile;
-}
-
 export function toPendency(p: {
   id: string;
   type: string;
@@ -193,8 +165,11 @@ export function toReport(r: {
   patientName: string;
   date: string;
   start: string;
+  end?: string | null;
   summary: string;
-  content: string;
+  evolution?: string | null;
+  content?: string | null;
+  nextSteps?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }): SessionReport {
@@ -204,11 +179,49 @@ export function toReport(r: {
     patientName: r.patientName,
     date: r.date,
     start: r.start,
-    end: "",
+    end: r.end ?? "",
     summary: r.summary,
-    evolution: r.content,
-    nextSteps: "",
+    evolution: r.evolution ?? r.content ?? "",
+    nextSteps: r.nextSteps ?? "",
     createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: r.updatedAt?.toISOString() ?? new Date().toISOString(),
   };
+}
+
+export function toAppointment(a: {
+  id: number;
+  date: string;
+  start: string;
+  end: string;
+  patient: string;
+  type: string;
+  mode: string;
+  status: string;
+  avatar: string;
+  meetUri?: string | null;
+  meetSpaceName?: string | null;
+  meetMock?: boolean | null;
+}): ScheduleItem & {
+  meetUri?: string;
+  meetSpaceName?: string;
+  meetMock?: boolean;
+} {
+  return {
+    id: a.id,
+    date: a.date,
+    start: a.start,
+    end: a.end,
+    patient: a.patient,
+    type: a.type,
+    mode: a.mode as ScheduleItem["mode"],
+    status: a.status as ScheduleItem["status"],
+    avatar: a.avatar,
+    meetUri: a.meetUri || undefined,
+    meetSpaceName: a.meetSpaceName || undefined,
+    meetMock: a.meetMock ?? undefined,
+  };
+}
+
+export function toProfile(data: unknown): PsychologistProfile {
+  return data as PsychologistProfile;
 }

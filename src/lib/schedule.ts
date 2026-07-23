@@ -2,7 +2,16 @@ import { todaySchedule, upcomingDays, type Appointment } from "@/lib/mock-data";
 
 export const SCHEDULE_KEY = "myhub_schedule_v1";
 export const SCHEDULE_EVENT = "myhub:schedule";
-export const SCHEDULE_TODAY = "2026-07-22";
+
+function localISODate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Data de referência da agenda (hoje no fuso local). */
+export const SCHEDULE_TODAY = localISODate();
 
 export type ScheduleItem = Appointment & { date: string };
 
@@ -12,6 +21,7 @@ const upcomingIsoById: Record<string, string> = {
   segunda: "2026-07-27",
 };
 
+/** @deprecated Demo only — not used for new accounts. */
 export function seedSchedule(): ScheduleItem[] {
   const today = todaySchedule.map((a) => ({ ...a, date: SCHEDULE_TODAY }));
   const upcoming = upcomingDays.flatMap((day) => {
@@ -23,14 +33,14 @@ export function seedSchedule(): ScheduleItem[] {
 }
 
 export function loadSchedule(): ScheduleItem[] {
-  if (typeof window === "undefined") return seedSchedule();
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(SCHEDULE_KEY);
-    if (!raw) return seedSchedule();
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as ScheduleItem[];
-    return Array.isArray(parsed) && parsed.length ? parsed : seedSchedule();
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return seedSchedule();
+    return [];
   }
 }
 

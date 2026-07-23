@@ -1,18 +1,8 @@
-import { AGENDA_TODAY, type DatedAppointment } from "@/lib/agenda";
+import { type DatedAppointment } from "@/lib/agenda";
 
-/** Relógio da agenda: horário real do dia sobre a data de referência do mock. */
-export function agendaNow(referenceDate = AGENDA_TODAY): Date {
-  const wall = new Date();
-  const [y, m, d] = referenceDate.split("-").map(Number);
-  return new Date(
-    y,
-    m - 1,
-    d,
-    wall.getHours(),
-    wall.getMinutes(),
-    wall.getSeconds(),
-    wall.getMilliseconds(),
-  );
+/** Relógio real da agenda. */
+export function agendaNow(_referenceDate?: string): Date {
+  return new Date();
 }
 
 export function combineDateAndTime(isoDate: string, time: string): Date {

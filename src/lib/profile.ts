@@ -1,3 +1,4 @@
+import { isValidBirthDate } from "@/lib/dates";
 import { currentUser } from "@/lib/mock-data";
 
 export const PROFILE_KEY = "myhub_profile_v1";
@@ -178,7 +179,7 @@ function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
-function isValidCpf(cpf: string) {
+export function isValidCpf(cpf: string) {
   const d = onlyDigits(cpf);
   if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
   let sum = 0;
@@ -229,6 +230,9 @@ export function validateProfile(profile: PsychologistProfile): ProfileValidation
     errors.cpf = "CPF é obrigatório para Receita Saúde.";
   } else if (!isValidCpf(profile.cpf)) {
     errors.cpf = "CPF inválido.";
+  }
+  if (profile.birthDate.trim() && !isValidBirthDate(profile.birthDate)) {
+    errors.birthDate = "Data de nascimento inválida.";
   }
   if (!profile.crpNumber.trim()) {
     errors.crpNumber = "CRP é obrigatório em prontuários e documentos.";

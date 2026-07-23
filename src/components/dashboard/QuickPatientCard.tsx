@@ -25,6 +25,7 @@ import { PaidMark } from "@/components/shared/PaidMark";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
+import { useSessionReports } from "@/hooks/useSessionReports";
 import {
   AGENDA_TODAY,
   getAppointmentDate,
@@ -32,11 +33,6 @@ import {
 } from "@/lib/agenda";
 import { needsPackageRenewal } from "@/lib/billing";
 import { formatFinanceDate } from "@/lib/finance";
-import {
-  getReportsForPatient,
-  SESSION_REPORTS_EVENT,
-  type SessionReport,
-} from "@/lib/session-reports";
 import { setStoredMeetLink } from "@/lib/meet-store";
 import type { Appointment } from "@/lib/mock-data";
 
@@ -67,7 +63,6 @@ export function QuickPatientCard({
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [reports, setReports] = useState<SessionReport[]>([]);
 
   const dated = useMemo<DatedAppointment>(() => {
     const live = items.find((a) => a.id === appointment.id);
@@ -78,6 +73,8 @@ export function QuickPatientCard({
         : (getAppointmentDate(appointment.id) ?? AGENDA_TODAY);
     return { ...appointment, date };
   }, [appointment, items]);
+
+  const { reports } = useSessionReports({ patientName: dated.patient });
 
   const patient = patientByName(dated.patient);
   const displayName = patient?.socialName || patient?.fullName || dated.patient;
@@ -119,19 +116,6 @@ export function QuickPatientCard({
         }
       });
   }, [dated.id]);
-
-  useEffect(() => {
-    function syncReports() {
-      setReports(getReportsForPatient(dated.patient));
-    }
-    syncReports();
-    window.addEventListener(SESSION_REPORTS_EVENT, syncReports);
-    window.addEventListener("storage", syncReports);
-    return () => {
-      window.removeEventListener(SESSION_REPORTS_EVENT, syncReports);
-      window.removeEventListener("storage", syncReports);
-    };
-  }, [dated.patient]);
 
   const history = useMemo(
     () =>

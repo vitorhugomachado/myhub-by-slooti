@@ -5,13 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
+import { usePendencies } from "@/hooks/usePendencies";
+import { useSessionReports } from "@/hooks/useSessionReports";
 import { AGENDA_TODAY, getAppointmentDate } from "@/lib/agenda";
 import { loadSchedule } from "@/lib/schedule";
-import {
-  getReportByAppointment,
-  upsertSessionReport,
-} from "@/lib/session-reports";
-import { loadPendencies, markPendencyDone } from "@/lib/pendencies";
 
 const inputClass =
   "w-full rounded-xl border border-line bg-bg px-3.5 py-3 text-[13px] text-brand outline-none placeholder:text-muted focus:border-surface";
@@ -21,6 +18,8 @@ export default function NovoProntuarioClient() {
   const params = useSearchParams();
   const patient = params.get("patient") ?? "Paciente";
   const appointmentId = Number(params.get("appointmentId") || 0);
+  const { upsertReport, reportByAppointment } = useSessionReports();
+  const { pendencies, markDone } = usePendencies();
 
   const appointment = useMemo(() => {
     if (!appointmentId) return null;
@@ -28,8 +27,8 @@ export default function NovoProntuarioClient() {
   }, [appointmentId]);
 
   const existing = useMemo(
-    () => (appointmentId ? getReportByAppointment(appointmentId) : undefined),
-    [appointmentId],
+    () => (appointmentId ? reportByAppointment(appointmentId) : undefined),
+    [appointmentId, reportByAppointment],
   );
 
   const [summary, setSummary] = useState(existing?.summary ?? "");
@@ -37,6 +36,7 @@ export default function NovoProntuarioClient() {
   const [nextSteps, setNextSteps] = useState(existing?.nextSteps ?? "");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!existing) return;
@@ -45,7 +45,7 @@ export default function NovoProntuarioClient() {
     setNextSteps(existing.nextSteps);
   }, [existing]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!summary.trim()) {
       setError("Descreva o resumo da sessão para salvar.");
@@ -56,28 +56,38 @@ export default function NovoProntuarioClient() {
       return;
     }
 
-    upsertSessionReport({
-      appointmentId,
-      patientName: appointment?.patient ?? patient,
-      date: appointment?.date ?? getAppointmentDate(appointmentId) ?? AGENDA_TODAY,
-      start: appointment?.start ?? "",
-      end: appointment?.end ?? "",
-      summary: summary.trim(),
-      evolution: evolution.trim(),
-      nextSteps: nextSteps.trim(),
-    });
+    setSaving(true);
+    try {
+      await upsertReport({
+        appointmentId,
+        patientName: appointment?.patient ?? patient,
+        date:
+          appointment?.date ??
+          getAppointmentDate(appointmentId) ??
+          AGENDA_TODAY,
+        start: appointment?.start ?? "",
+        end: appointment?.end ?? "",
+        summary: summary.trim(),
+        evolution: evolution.trim(),
+        nextSteps: nextSteps.trim(),
+      });
 
-    const pendency = loadPendencies().find(
-      (p) =>
-        p.status === "pending" &&
-        p.type === "prontuario" &&
-        p.appointmentId === appointmentId,
-    );
-    if (pendency) markPendencyDone(pendency.id);
+      const pendency = pendencies.find(
+        (p) =>
+          p.status === "pending" &&
+          p.type === "prontuario" &&
+          p.appointmentId === appointmentId,
+      );
+      if (pendency) await markDone(pendency.id);
 
-    setError("");
-    setSaved(true);
-    window.setTimeout(() => router.push("/"), 900);
+      setError("");
+      setSaved(true);
+      window.setTimeout(() => router.push("/"), 900);
+    } catch {
+      setError("Não foi possível salvar o prontuário. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -170,9 +180,10 @@ export default function NovoProntuarioClient() {
             </Link>
             <button
               type="submit"
-              className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand"
+              disabled={saving}
+              className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand disabled:opacity-60"
             >
-              Salvar relato
+              {saving ? "Salvando..." : "Salvar relato"}
             </button>
           </div>
         </form>

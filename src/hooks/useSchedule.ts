@@ -9,7 +9,6 @@ import {
   rescheduleAppointment,
   saveSchedule,
   SCHEDULE_EVENT,
-  seedSchedule,
 } from "@/lib/schedule";
 
 async function fetchSchedule(): Promise<DatedAppointment[]> {
@@ -31,7 +30,7 @@ async function persistSchedule(items: DatedAppointment[]) {
 }
 
 export function useSchedule() {
-  const [items, setItems] = useState<DatedAppointment[]>(seedSchedule);
+  const [items, setItems] = useState<DatedAppointment[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {

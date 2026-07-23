@@ -5,15 +5,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
 import { useFinance } from "@/hooks/useFinance";
+import { usePendencies } from "@/hooks/usePendencies";
+import { getCachedUser } from "@/lib/auth";
 import { AGENDA_TODAY, getAppointmentDate } from "@/lib/agenda";
 import { findPatientByName, needsPackageRenewal } from "@/lib/billing";
 import type { Appointment } from "@/lib/mock-data";
-import {
-  addPendency,
-  pendencyLabel,
-  type PendencyType,
-} from "@/lib/pendencies";
+import { pendencyLabel, type PendencyType } from "@/lib/pendencies";
 import { ensurePatientByName } from "@/lib/patients";
+import { hasFinanceAccess } from "@/lib/plans";
 
 type Step = "confirm" | "payment" | "followup";
 
@@ -30,6 +29,7 @@ export function FinishSessionFlow({
 }) {
   const router = useRouter();
   const { billSession, paid, patientByName } = useFinance();
+  const { addPendency } = usePendencies();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>("confirm");
   const [prontuario, setProntuario] = useState<Choice>(null);
@@ -58,12 +58,16 @@ export function FinishSessionFlow({
       ensurePatientByName(appointment.patient, {
         avatar: appointment.avatar,
       });
+    const financeOk = hasFinanceAccess(getCachedUser()?.plan);
     const skipPayment =
-      patient.billingMode === "pacote" &&
-      Number(patient.creditsLeft || 0) > 0 &&
-      !patient.renewalDue;
+      !financeOk ||
+      (patient.billingMode === "pacote" &&
+        Number(patient.creditsLeft || 0) > 0 &&
+        !patient.renewalDue);
 
-    billSession(dated);
+    if (financeOk) {
+      billSession(dated);
+    }
     onFinished();
     setStep(skipPayment ? "followup" : "payment");
   }
@@ -74,7 +78,7 @@ export function FinishSessionFlow({
 
     if (choice === "later") {
       const patient = patientByName(appointment.patient);
-      addPendency({
+      void addPendency({
         type,
         patientName: appointment.patient,
         patientId: patient?.id,

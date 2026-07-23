@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { bootstrapUserData } from "@/lib/bootstrap";
 import { prisma } from "@/lib/db";
-import { createSession } from "@/lib/session";
+import { createSession, toPublicUser } from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +30,8 @@ export async function POST(request: Request) {
           name,
           passwordHash: "",
           provider: "google",
+          plan: "",
+          paymentGateway: "",
         },
       });
       isNew = true;
@@ -46,14 +48,7 @@ export async function POST(request: Request) {
 
     await createSession(user.id);
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        provider: user.provider,
-      },
-    });
+    return NextResponse.json({ user: toPublicUser(user) });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   PATIENTS_EVENT,
   savePatients,
-  seedPatients,
   type Patient,
 } from "@/lib/patients";
 
@@ -17,17 +16,20 @@ async function fetchPatients(): Promise<Patient[]> {
 }
 
 async function persistPatients(patients: Patient[]) {
-  await fetch("/api/patients", {
+  const res = await fetch("/api/patients", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ patients }),
   });
+  if (!res.ok) {
+    throw new Error("Falha ao salvar pacientes no servidor.");
+  }
   window.dispatchEvent(new Event(PATIENTS_EVENT));
 }
 
 export function usePatients() {
-  const [patients, setPatientsState] = useState<Patient[]>(seedPatients);
+  const [patients, setPatientsState] = useState<Patient[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -50,12 +52,13 @@ export function usePatients() {
   }, []);
 
   const setPatients = useCallback(
-    (updater: Patient[] | ((prev: Patient[]) => Patient[])) => {
+    async (updater: Patient[] | ((prev: Patient[]) => Patient[])) => {
+      let next: Patient[] = [];
       setPatientsState((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
-        void persistPatients(next);
+        next = typeof updater === "function" ? updater(prev) : updater;
         return next;
       });
+      await persistPatients(next);
     },
     [],
   );

@@ -3,6 +3,8 @@
 import { Camera, CheckCircle2, Trash2, UserRound, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BirthDateField } from "@/components/shared/BirthDateField";
+import { useCepAutofill } from "@/hooks/useCepAutofill";
 import {
   APPROACHES,
   BRAZIL_UFS,
@@ -69,7 +71,7 @@ export function PsychologistProfileForm({
 }: {
   initial: PsychologistProfile;
   onClose: () => void;
-  onSave: (profile: PsychologistProfile) => void;
+  onSave: (profile: PsychologistProfile) => void | Promise<void>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<PsychologistProfile>(initial);
@@ -79,9 +81,13 @@ export function PsychologistProfileForm({
   const [savedFlash, setSavedFlash] = useState(false);
   const [avatarError, setAvatarError] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     setForm(initial);
+    setTried(false);
+    setSaveError("");
     const frame = requestAnimationFrame(() => setVisible(true));
     document.body.style.overflow = "hidden";
     return () => {
@@ -95,6 +101,17 @@ export function PsychologistProfileForm({
   const canResetAvatar = form.avatar !== defaultAvatar;
   const avatarUnoptimized =
     form.avatar.startsWith("data:") || form.avatar.startsWith("blob:");
+
+  const cep = useCepAutofill(form.zip, (address) => {
+    setForm((prev) => ({
+      ...prev,
+      zip: address.zip,
+      street: address.street || prev.street,
+      neighborhood: address.neighborhood || prev.neighborhood,
+      city: address.city || prev.city,
+      state: address.state || prev.state,
+    }));
+  });
 
   function set<K extends keyof PsychologistProfile>(
     key: K,
@@ -132,12 +149,19 @@ export function PsychologistProfileForm({
     set("avatar", defaultAvatar);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setTried(true);
+    setSaveError("");
     const result = validateProfile(form);
     if (!result.ok) {
-      if (result.errors.fullName || result.errors.email || result.errors.phone || result.errors.cpf) {
+      if (
+        result.errors.fullName ||
+        result.errors.email ||
+        result.errors.phone ||
+        result.errors.cpf ||
+        result.errors.birthDate
+      ) {
         setSection("dados");
       } else if (result.errors.crpNumber || result.errors.crpUf) {
         setSection("profissional");
@@ -152,12 +176,23 @@ export function PsychologistProfileForm({
       ...form,
       signatureName: form.signatureName.trim() || form.fullName.trim(),
     };
-    onSave(next);
-    setSavedFlash(true);
-    window.setTimeout(() => {
-      setSavedFlash(false);
-      handleClose();
-    }, 700);
+    setSaving(true);
+    try {
+      await Promise.resolve(onSave(next));
+      setSavedFlash(true);
+      window.setTimeout(() => {
+        setSavedFlash(false);
+        handleClose();
+      }, 700);
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o perfil. Tente novamente.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   function err(key: keyof PsychologistProfile) {
@@ -176,7 +211,7 @@ export function PsychologistProfileForm({
       />
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => void handleSubmit(e)}
         className={`relative z-10 flex max-h-[min(94vh,920px)] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] border border-line bg-card shadow-[0_24px_80px_rgba(20,22,26,0.18)] transition-all duration-300 ease-out sm:rounded-[28px] ${
           visible
             ? "translate-y-0 scale-100 opacity-100"
@@ -354,12 +389,11 @@ export function PsychologistProfileForm({
                   inputMode="tel"
                 />
               </Field>
-              <Field label="Data de nascimento">
-                <input
-                  type="date"
-                  className={inputClass}
+              <Field label="Data de nascimento" error={err("birthDate")}>
+                <BirthDateField
                   value={form.birthDate}
-                  onChange={(e) => set("birthDate", e.target.value)}
+                  onChange={(iso) => set("birthDate", iso)}
+                  error={Boolean(err("birthDate"))}
                 />
               </Field>
               <Field label="CPF *" error={err("cpf")}>
@@ -536,6 +570,15 @@ export function PsychologistProfileForm({
                   placeholder="00000-000"
                   inputMode="numeric"
                 />
+                {cep.message ? (
+                  <span
+                    className={`mt-1 block text-[11px] ${
+                      cep.status === "error" ? "text-danger" : "text-muted"
+                    }`}
+                  >
+                    {cep.message}
+                  </span>
+                ) : null}
               </Field>
               <Field label="Bairro">
                 <input
@@ -592,7 +635,9 @@ export function PsychologistProfileForm({
 
         <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[11px] text-muted">
-            {savedFlash ? (
+            {saveError ? (
+              <span className="text-danger">{saveError}</span>
+            ) : savedFlash ? (
               <span className="inline-flex items-center gap-1 font-semibold text-accent-deep">
                 <CheckCircle2 className="size-3.5" />
                 Perfil salvo
@@ -613,9 +658,10 @@ export function PsychologistProfileForm({
             </button>
             <button
               type="submit"
-              className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand"
+              disabled={saving}
+              className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand disabled:opacity-60"
             >
-              Salvar perfil
+              {saving ? "Salvando…" : "Salvar perfil"}
             </button>
           </div>
         </div>

@@ -334,16 +334,14 @@ export function normalizePatient(
 }
 
 export function loadPatients(): Patient[] {
-  if (typeof window === "undefined") return seedPatients;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedPatients;
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as Patient[];
-    return Array.isArray(parsed) && parsed.length
-      ? parsed.map((p) => normalizePatient(p))
-      : seedPatients;
+    return Array.isArray(parsed) ? parsed.map((p) => normalizePatient(p)) : [];
   } catch {
-    return seedPatients;
+    return [];
   }
 }
 

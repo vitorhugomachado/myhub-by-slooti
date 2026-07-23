@@ -15,12 +15,15 @@ async function fetchProfile(): Promise<PsychologistProfile> {
 }
 
 async function persistProfile(profile: PsychologistProfile) {
-  await fetch("/api/profile", {
+  const res = await fetch("/api/profile", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ profile }),
   });
+  if (!res.ok) {
+    throw new Error("Falha ao salvar o perfil no servidor.");
+  }
   window.dispatchEvent(new Event(PROFILE_EVENT));
 }
 
@@ -47,9 +50,9 @@ export function useProfile() {
     };
   }, []);
 
-  const update = useCallback((next: PsychologistProfile) => {
+  const update = useCallback(async (next: PsychologistProfile) => {
     setProfile(next);
-    void persistProfile(next);
+    await persistProfile(next);
   }, []);
 
   return { profile, hydrated, update };

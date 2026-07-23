@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AUTH_EVENT, fetchSessionUser, getCachedUser } from "@/lib/auth";
+import { hasFinanceAccess, needsPlanOnboarding, postAuthPath } from "@/lib/plans";
 
 const PUBLIC_PREFIXES = ["/login", "/auth"];
 
@@ -12,10 +13,15 @@ function isPublicPath(pathname: string) {
   );
 }
 
+function isOnboardingPath(pathname: string) {
+  return pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+}
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const publicRoute = isPublicPath(pathname);
+  const onboardingRoute = isOnboardingPath(pathname);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -26,8 +32,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
 
       const pub = isPublicPath(pathname);
+      const onboarding = isOnboardingPath(pathname);
 
-      if (!pub && !user) {
+      if (!pub && !onboarding && !user) {
         setReady(false);
         router.replace("/login");
         return;
@@ -35,7 +42,40 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
       if (pathname === "/login" && user) {
         setReady(false);
-        router.replace("/");
+        router.replace(postAuthPath(user));
+        return;
+      }
+
+      if (user && needsPlanOnboarding(user.plan) && !onboarding && !pub) {
+        setReady(false);
+        router.replace("/onboarding");
+        return;
+      }
+
+      if (
+        user &&
+        user.plan === "pro" &&
+        !user.paymentGateway &&
+        !onboarding &&
+        !pub
+      ) {
+        setReady(false);
+        router.replace("/onboarding?step=gateway");
+        return;
+      }
+
+      if (user && onboarding) {
+        setReady(true);
+        return;
+      }
+
+      if (
+        user &&
+        !hasFinanceAccess(user.plan) &&
+        (pathname === "/financeiro" || pathname.startsWith("/financeiro/"))
+      ) {
+        setReady(false);
+        router.replace("/?upgrade=financeiro");
         return;
       }
 
@@ -54,7 +94,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, router]);
 
-  if (!ready && !publicRoute) {
+  if (!ready && !publicRoute && !onboardingRoute) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg">
         <div className="flex flex-col items-center gap-3">
@@ -65,8 +105,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!ready && publicRoute) {
-    // Allow login/auth pages to render while session resolves
+  if (!ready && (publicRoute || onboardingRoute)) {
     return <>{children}</>;
   }
 

@@ -3,7 +3,7 @@
 import { Loader2, TrendingUp } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { loginWithGoogle } from "@/lib/auth";
+import { loginWithGoogle, postAuthPath } from "@/lib/auth";
 
 function AuthCallbackInner() {
   const router = useRouter();
@@ -63,7 +63,7 @@ function AuthCallbackInner() {
         return;
       }
 
-      if (!cancelled) router.replace("/");
+      if (!cancelled) router.replace(postAuthPath(result.user));
     }
 
     void finish();

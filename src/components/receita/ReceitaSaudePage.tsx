@@ -2,28 +2,14 @@
 
 import { FilePlus2, Pill, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
-import {
-  loadPendencies,
-  PENDENCIES_EVENT,
-  type Pendency,
-} from "@/lib/pendencies";
+import { usePendencies } from "@/hooks/usePendencies";
+import { pendencyHref } from "@/lib/pendencies";
 
 export function ReceitaSaudePage() {
   const [query, setQuery] = useState("");
-  const [pendencies, setPendencies] = useState<Pendency[]>([]);
-
-  useEffect(() => {
-    const refresh = () => setPendencies(loadPendencies());
-    refresh();
-    window.addEventListener(PENDENCIES_EVENT, refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener(PENDENCIES_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, []);
+  const { pendencies } = usePendencies();
 
   const pendingReceitas = useMemo(() => {
     const q = query.trim().toLowerCase();

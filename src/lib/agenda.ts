@@ -3,11 +3,10 @@ import {
   activeAppointments,
   loadSchedule,
   SCHEDULE_TODAY,
-  seedSchedule,
   type ScheduleItem,
 } from "@/lib/schedule";
 
-/** Data de referência alinhada aos mocks da agenda. */
+/** Data de referência da agenda (hoje no fuso local). */
 export const AGENDA_TODAY = SCHEDULE_TODAY;
 
 export type DatedAppointment = ScheduleItem;
@@ -15,8 +14,7 @@ export type DatedAppointment = ScheduleItem;
 export function getDatedAppointments(opts?: {
   includeCancelled?: boolean;
 }): DatedAppointment[] {
-  const items =
-    typeof window === "undefined" ? seedSchedule() : loadSchedule();
+  const items = loadSchedule();
   return opts?.includeCancelled ? items : activeAppointments(items);
 }
 

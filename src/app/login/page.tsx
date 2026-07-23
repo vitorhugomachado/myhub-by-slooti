@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import {
   fetchSessionUser,
   loginWithEmail,
+  postAuthPath,
   signUpWithEmail,
 } from "@/lib/auth";
 
@@ -30,7 +31,7 @@ function LoginForm() {
 
   useEffect(() => {
     void fetchSessionUser().then((user) => {
-      if (user) router.replace("/");
+      if (user) router.replace(postAuthPath(user));
     });
 
     const google = searchParams.get("google");
@@ -69,7 +70,7 @@ function LoginForm() {
           setError(result.error);
           return;
         }
-        router.replace("/");
+        router.replace(postAuthPath(result.user));
         return;
       }
 
@@ -78,7 +79,7 @@ function LoginForm() {
         setError(result.error);
         return;
       }
-      router.replace("/");
+      router.replace(postAuthPath(result.user));
     } finally {
       setLoading(false);
     }

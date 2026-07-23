@@ -1,8 +1,6 @@
 import type { DatedAppointment } from "@/lib/agenda";
 import {
   ensurePatientSaved,
-  loadPatients,
-  savePatients,
   type BillingMode,
   type Patient,
   type PaymentMethod,
@@ -198,7 +196,7 @@ function normalizeCharge(raw: Partial<FinanceCharge> & FinanceCharge): FinanceCh
 }
 
 export function loadFinance(): FinanceCharge[] {
-  if (typeof window === "undefined") return seedFinance;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(FINANCE_KEY);
     if (!raw) {
@@ -217,14 +215,12 @@ export function loadFinance(): FinanceCharge[] {
           return migrated;
         }
       }
-      return seedFinance;
+      return [];
     }
     const parsed = JSON.parse(raw) as FinanceCharge[];
-    return Array.isArray(parsed) && parsed.length
-      ? parsed.map(normalizeCharge)
-      : seedFinance;
+    return Array.isArray(parsed) ? parsed.map(normalizeCharge) : [];
   } catch {
-    return seedFinance;
+    return [];
   }
 }
 
@@ -471,16 +467,16 @@ export function applySessionBilling(
   };
 }
 
-/** Ao marcar renovação como paga, restaura créditos do pacote. */
+/** Ao marcar renovação como paga, restaura créditos do pacote (puro). */
 export function applyChargeEditSideEffects(
+  patients: Patient[],
   charge: FinanceCharge,
   previous: FinanceCharge | undefined,
-) {
-  if (!charge.patientId) return;
+): Patient[] {
+  if (!charge.patientId) return patients;
 
-  const patients = loadPatients();
   const idx = patients.findIndex((p) => p.id === charge.patientId);
-  if (idx < 0) return;
+  if (idx < 0) return patients;
 
   const patient = patients[idx];
   let next = patient;
@@ -529,20 +525,21 @@ export function applyChargeEditSideEffects(
     };
   }
 
-  if (next !== patient) {
-    const list = [...patients];
-    list[idx] = next;
-    savePatients(list);
-  }
+  if (next === patient) return patients;
+  const list = [...patients];
+  list[idx] = next;
+  return list;
 }
 
-/** Reverte créditos ao excluir um lançamento. */
-export function applyChargeDeleteSideEffects(charge: FinanceCharge) {
-  if (!charge.patientId) return;
+/** Reverte créditos ao excluir um lançamento (puro). */
+export function applyChargeDeleteSideEffects(
+  patients: Patient[],
+  charge: FinanceCharge,
+): Patient[] {
+  if (!charge.patientId) return patients;
 
-  const patients = loadPatients();
   const idx = patients.findIndex((p) => p.id === charge.patientId);
-  if (idx < 0) return;
+  if (idx < 0) return patients;
 
   const patient = patients[idx];
   let next = patient;
@@ -565,9 +562,8 @@ export function applyChargeDeleteSideEffects(charge: FinanceCharge) {
     };
   }
 
-  if (next !== patient) {
-    const list = [...patients];
-    list[idx] = next;
-    savePatients(list);
-  }
+  if (next === patient) return patients;
+  const list = [...patients];
+  list[idx] = next;
+  return list;
 }

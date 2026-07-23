@@ -1,3 +1,7 @@
+import { postAuthPath } from "@/lib/plans";
+
+export { postAuthPath };
+
 export const AUTH_EVENT = "myhub:auth";
 
 export type AuthProvider = "email" | "google";
@@ -7,6 +11,8 @@ export type AuthSessionUser = {
   email: string;
   name: string;
   provider: AuthProvider | string;
+  plan: string;
+  paymentGateway: string;
 };
 
 export type AuthResult =
@@ -114,7 +120,20 @@ export async function logout() {
   }
 }
 
-/** @deprecated */
-export function login() {
-  /* no-op — use loginWithEmail */
+export async function choosePlan(input: {
+  plan: "free" | "pro";
+  paymentGateway?: string;
+}): Promise<AuthResult> {
+  const res = await fetch("/api/auth/plan", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    return { ok: false, error: data.error || "Falha ao salvar o plano." };
+  }
+  setCachedUser(data.user);
+  return { ok: true, user: data.user };
 }

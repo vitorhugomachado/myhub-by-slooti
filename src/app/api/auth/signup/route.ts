@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import {
   createSession,
   hashPassword,
-  verifyPassword,
+  toPublicUser,
 } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -45,20 +45,15 @@ export async function POST(request: Request) {
         name,
         passwordHash: hashPassword(password),
         provider: "email",
+        plan: "",
+        paymentGateway: "",
       },
     });
 
     await bootstrapUserData(user.id, user.name, user.email);
     await createSession(user.id);
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        provider: user.provider,
-      },
-    });
+    return NextResponse.json({ user: toPublicUser(user) });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Falha ao criar conta." }, { status: 500 });

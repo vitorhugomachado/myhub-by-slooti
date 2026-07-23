@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { patientWriteData, toPatient } from "@/lib/mappers";
 import type { Patient } from "@/lib/patients";
+import { FREE_PATIENT_LIMIT, maxPatientsForPlan } from "@/lib/plans";
 import { getSessionUser } from "@/lib/session";
 
 export async function GET() {
@@ -13,7 +14,11 @@ export async function GET() {
     where: { userId: user.id },
     orderBy: { fullName: "asc" },
   });
-  return NextResponse.json({ patients: rows.map(toPatient) });
+  return NextResponse.json({
+    patients: rows.map(toPatient),
+    plan: user.plan,
+    limit: maxPatientsForPlan(user.plan),
+  });
 }
 
 export async function PUT(request: Request) {
@@ -24,6 +29,17 @@ export async function PUT(request: Request) {
 
   const body = (await request.json()) as { patients?: Patient[] };
   const patients = Array.isArray(body.patients) ? body.patients : [];
+  const limit = maxPatientsForPlan(user.plan);
+
+  if (patients.length > limit) {
+    return NextResponse.json(
+      {
+        error: `Plano gratuito permite no máximo ${FREE_PATIENT_LIMIT} pacientes. Faça upgrade para o Pro.`,
+        limit: FREE_PATIENT_LIMIT,
+      },
+      { status: 403 },
+    );
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.patient.deleteMany({ where: { userId: user.id } });

@@ -2,31 +2,11 @@
 
 import { Check, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import {
-  loadPendencies,
-  markPendencyDone,
-  pendencyHref,
-  pendencyLabel,
-  PENDENCIES_EVENT,
-  type Pendency,
-} from "@/lib/pendencies";
+import { usePendencies } from "@/hooks/usePendencies";
+import { pendencyHref, pendencyLabel } from "@/lib/pendencies";
 
 export function Reminders() {
-  const [pendencies, setPendencies] = useState<Pendency[]>([]);
-
-  useEffect(() => {
-    const refresh = () => setPendencies(loadPendencies());
-    refresh();
-    window.addEventListener(PENDENCIES_EVENT, refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener(PENDENCIES_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, []);
-
-  const pending = pendencies.filter((p) => p.status === "pending");
+  const { pending, markDone } = usePendencies();
 
   return (
     <article className="card flex flex-col p-5">
@@ -68,7 +48,7 @@ export function Reminders() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => markPendencyDone(item.id)}
+                  onClick={() => void markDone(item.id)}
                   className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-line bg-bg px-3 py-2 text-[11px] font-semibold text-brand hover:bg-surface-soft sm:flex-none"
                 >
                   <Check className="size-3.5" />

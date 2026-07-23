@@ -9,6 +9,8 @@ export type SessionUser = {
   email: string;
   name: string;
   provider: string;
+  plan: string;
+  paymentGateway: string;
 };
 
 function sessionSecret() {
@@ -73,6 +75,24 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 
+export function toPublicUser(user: {
+  id: string;
+  email: string;
+  name: string;
+  provider: string;
+  plan: string;
+  paymentGateway: string;
+}): SessionUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    provider: user.provider,
+    plan: user.plan,
+    paymentGateway: user.paymentGateway,
+  };
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   const jar = await cookies();
   const raw = jar.get(SESSION_COOKIE)?.value;
@@ -85,12 +105,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return null;
 
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    provider: user.provider,
-  };
+  return toPublicUser(user);
 }
 
 export async function requireUser() {
