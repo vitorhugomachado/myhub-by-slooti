@@ -12,23 +12,24 @@ import {
   Video,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
 import { PatientForm } from "@/components/patients/PatientForm";
 import { BillingBadge } from "@/components/shared/BillingBadge";
+import { usePatients } from "@/hooks/usePatients";
 import {
   loadPendencies,
+  pendencyHref,
   pendencyLabel,
   PENDENCIES_EVENT,
   type Pendency,
 } from "@/lib/pendencies";
 import {
   emptyPatient,
+  ensurePatientByName,
   formatDateBr,
-  loadPatients,
-  PATIENTS_EVENT,
-  savePatients,
-  seedPatients,
   statusLabel,
   type Patient,
 } from "@/lib/patients";
@@ -36,7 +37,8 @@ import {
 type ViewMode = "cards" | "list";
 
 export function PatientsPage() {
-  const [patients, setPatients] = useState<Patient[]>(seedPatients);
+  const searchParams = useSearchParams();
+  const { patients, setPatients, hydrated } = usePatients();
   const [nameFilter, setNameFilter] = useState("");
   const [startSort, setStartSort] = useState<"recent" | "oldest">("recent");
   const [statusFilter, setStatusFilter] = useState<"todos" | Patient["status"]>(
@@ -44,29 +46,9 @@ export function PatientsPage() {
   );
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
-  const [hydrated, setHydrated] = useState(false);
   const [pendencies, setPendencies] = useState<Pendency[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
-
-  useEffect(() => {
-    setPatients(loadPatients());
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    function sync() {
-      const next = loadPatients();
-      setPatients((prev) =>
-        JSON.stringify(prev) === JSON.stringify(next) ? prev : next,
-      );
-    }
-    window.addEventListener(PATIENTS_EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(PATIENTS_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
+  const deeplinkHandled = useRef(false);
 
   useEffect(() => {
     const refresh = () => setPendencies(loadPendencies());
@@ -80,9 +62,26 @@ export function PatientsPage() {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    savePatients(patients);
-  }, [patients, hydrated]);
+    if (!hydrated || deeplinkHandled.current) return;
+    const id = searchParams.get("id");
+    const name = searchParams.get("name");
+    if (!id && !name) return;
+
+    deeplinkHandled.current = true;
+    if (id) {
+      const found = patients.find((p) => p.id === id);
+      if (found) {
+        setEditing(found);
+        setFormOpen(true);
+      }
+      return;
+    }
+    if (name) {
+      const stub = ensurePatientByName(decodeURIComponent(name));
+      setEditing(stub);
+      setFormOpen(true);
+    }
+  }, [hydrated, searchParams, patients]);
 
   function pendenciesFor(patient: Patient) {
     return pendencies.filter(
@@ -388,12 +387,14 @@ export function PatientsPage() {
                 {pending.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {pending.map((p) => (
-                      <span
+                      <Link
                         key={p.id}
-                        className="rounded-full bg-orange/15 px-2.5 py-1 text-[10px] font-bold text-orange"
+                        href={pendencyHref(p)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-full bg-orange/15 px-2.5 py-1 text-[10px] font-bold text-orange transition-colors hover:bg-orange/25"
                       >
                         Pendente: {pendencyLabel(p.type)}
-                      </span>
+                      </Link>
                     ))}
                   </div>
                 )}
@@ -486,12 +487,14 @@ export function PatientsPage() {
                           ) : (
                             <div className="flex flex-wrap gap-1">
                               {pending.map((p) => (
-                                <span
+                                <Link
                                   key={p.id}
-                                  className="rounded-full bg-orange/15 px-2 py-0.5 text-[10px] font-bold text-orange"
+                                  href={pendencyHref(p)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded-full bg-orange/15 px-2 py-0.5 text-[10px] font-bold text-orange transition-colors hover:bg-orange/25"
                                 >
                                   {pendencyLabel(p.type)}
-                                </span>
+                                </Link>
                               ))}
                             </div>
                           )}

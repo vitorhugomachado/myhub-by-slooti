@@ -1,5 +1,5 @@
-import { SessoesPage } from "@/components/sessoes/SessoesPage";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <SessoesPage />;
+  redirect("/agenda");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, MapPin, Video, X } from "lucide-react";
+import { CalendarDays, MapPin, Video, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -114,10 +114,10 @@ export function SessoesPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-brand sm:text-3xl">
-              Sessões
+              Agenda
             </h1>
             <p className="mt-1 text-[13px] text-muted">
-              Calendário de atendimentos — cancele ou troque o horário
+              Calendário de atendimentos — cancele ou remarque sessões
             </p>
           </div>
 
@@ -280,8 +280,8 @@ export function SessoesPage() {
                             onClick={() => setRescheduleTarget(appt)}
                             className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3 py-2 text-[12px] font-semibold text-brand hover:bg-surface-soft"
                           >
-                            <Clock3 className="size-3.5" />
-                            Horário
+                            <CalendarDays className="size-3.5" />
+                            Remarcar
                           </button>
                           <button
                             type="button"

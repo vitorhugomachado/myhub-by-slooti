@@ -34,11 +34,13 @@ export function ChargeEditDrawer({
   charge,
   onClose,
   onSave,
+  onDelete,
   title = "Editar recebimento",
 }: {
   charge: FinanceCharge;
   onClose: () => void;
   onSave: (charge: FinanceCharge) => void;
+  onDelete?: (chargeId: string) => void;
   title?: string;
 }) {
   const [visible, setVisible] = useState(false);
@@ -244,20 +246,42 @@ export function ChargeEditDrawer({
           </label>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-line px-5 py-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-full border border-line bg-bg px-5 py-3 text-[13px] font-semibold text-brand"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand"
-          >
-            Salvar
-          </button>
+        <div className="flex flex-col-reverse gap-2 border-t border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Excluir este lançamento? Créditos de pacote serão ajustados se necessário.",
+                  )
+                ) {
+                  onDelete(form.id);
+                  handleClose();
+                }
+              }}
+              className="rounded-full border border-danger/30 bg-danger/10 px-5 py-3 text-[13px] font-semibold text-danger"
+            >
+              Excluir
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-full border border-line bg-bg px-5 py-3 text-[13px] font-semibold text-brand"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand"
+            >
+              Salvar
+            </button>
+          </div>
         </div>
       </form>
     </div>

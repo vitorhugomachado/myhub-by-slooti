@@ -1,10 +1,17 @@
+"use client";
+
 import { CalendarDays, CheckCircle2, Clock } from "lucide-react";
-import { todaySchedule } from "@/lib/mock-data";
+import { useSchedule } from "@/hooks/useSchedule";
+import { AGENDA_TODAY } from "@/lib/agenda";
 
 export function DaySummary() {
-  const total = todaySchedule.length;
-  const done = todaySchedule.filter((a) => a.status === "done").length;
-  const remaining = total - done;
+  const { forDate } = useSchedule();
+  const todayItems = forDate(AGENDA_TODAY, false);
+  const total = todayItems.length;
+  const done = todayItems.filter((a) => a.status === "done").length;
+  const remaining = todayItems.filter(
+    (a) => a.status === "now" || a.status === "upcoming",
+  ).length;
 
   const items = [
     {

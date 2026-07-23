@@ -10,8 +10,7 @@ export const navItems = [
   { label: "Pacientes", href: "/pacientes" },
   { label: "Financeiro", href: "/financeiro" },
   { label: "Receita Saúde", href: "/receita-saude" },
-  { label: "Sessões", href: "/sessoes" },
-  { label: "Agenda", href: "#" },
+  { label: "Agenda", href: "/agenda" },
 ] as const;
 
 export type AppointmentStatus = "done" | "now" | "upcoming" | "cancelled";
@@ -27,10 +26,7 @@ export type Appointment = {
   avatar: string;
 };
 
-export function getAppointmentById(id: number) {
-  return todaySchedule.find((a) => a.id === id);
-}
-
+/** @deprecated Use Patient from loadPatients / findPatientByName. */
 export type PatientProfile = {
   appointmentId: number;
   fullName: string;
@@ -42,58 +38,8 @@ export type PatientProfile = {
   notes: string;
 };
 
-export const patientProfiles: PatientProfile[] = [
-  {
-    appointmentId: 3,
-    fullName: "Marina Alves",
-    email: "marina.alves@email.com",
-    phone: "(11) 98888-1122",
-    birthDate: "14/03/1994",
-    cpf: "•••.•••.•••-42",
-    since: "Jan 2026",
-    notes: "Primeira avaliação. Queixa principal: ansiedade situacional.",
-  },
-  {
-    appointmentId: 4,
-    fullName: "Julia Costa",
-    email: "julia.costa@email.com",
-    phone: "(11) 97777-3344",
-    birthDate: "22/08/1988",
-    cpf: "•••.•••.•••-18",
-    since: "Nov 2025",
-    notes: "Acompanhamento de casal. Sessões quinzenais.",
-  },
-  {
-    appointmentId: 5,
-    fullName: "Pedro Santos",
-    email: "pedro.santos@email.com",
-    phone: "(11) 96666-5566",
-    birthDate: "05/12/1990",
-    cpf: "•••.•••.•••-77",
-    since: "Ago 2025",
-    notes: "Retorno de acompanhamento cognitivo-comportamental.",
-  },
-];
-
-export function getPatientProfile(appointmentId: number) {
-  const appointment = getAppointmentById(appointmentId);
-  const profile = patientProfiles.find((p) => p.appointmentId === appointmentId);
-
-  if (!appointment) return null;
-
-  return (
-    profile ?? {
-      appointmentId,
-      fullName: appointment.patient,
-      email: "paciente@email.com",
-      phone: "(11) 90000-0000",
-      birthDate: "—",
-      cpf: "•••.•••.•••-••",
-      since: "—",
-      notes: "Cadastro básico. Dados completos serão preenchidos em breve.",
-    }
-  );
-}
+/** @deprecated Prefer cadastro em localStorage (Patient). Mantido só para legado. */
+export const patientProfiles: PatientProfile[] = [];
 
 // Agenda do dia (ordenada por horário). "now" = atendimento atual.
 export const todaySchedule: Appointment[] = [
@@ -363,3 +309,45 @@ export const reminders = [
   { id: 2, text: "Concluir prontuário de Roberto Lima", tag: "Hoje" },
   { id: 3, text: "Confirmar sessão de Julia Costa", tag: "14:00" },
 ] as const;
+
+export function getAppointmentById(id: number) {
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("myhub_schedule_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { id: number }[];
+        const live = parsed.find((a) => a.id === id);
+        if (live) return live as Appointment;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const fromToday = todaySchedule.find((a) => a.id === id);
+  if (fromToday) return fromToday;
+  for (const day of upcomingDays) {
+    const found = day.appointments.find((a) => a.id === id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** @deprecated Prefer findPatientByName / Patient em localStorage. */
+export function getPatientProfile(
+  appointmentId: number,
+  fallback?: Appointment,
+) {
+  const appointment = getAppointmentById(appointmentId) ?? fallback;
+  if (!appointment) return null;
+
+  return {
+    appointmentId,
+    fullName: appointment.patient,
+    email: "",
+    phone: "",
+    birthDate: "—",
+    cpf: "—",
+    since: "—",
+    notes: "Use o cadastro em Pacientes para dados completos.",
+  };
+}

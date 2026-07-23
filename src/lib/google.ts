@@ -50,6 +50,7 @@ export async function exchangeCodeForTokens(code: string) {
     refresh_token?: string;
     expires_in: number;
     token_type: string;
+    id_token?: string;
   };
 }
 
@@ -74,6 +75,40 @@ export async function refreshAccessToken(refreshToken: string) {
     access_token: string;
     expires_in: number;
     token_type: string;
+  };
+}
+
+export type GoogleUserInfo = {
+  email: string;
+  name: string;
+  picture?: string;
+  sub?: string;
+};
+
+export async function getGoogleUserInfo(
+  accessToken: string,
+): Promise<GoogleUserInfo> {
+  const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Falha ao obter perfil Google: ${text}`);
+  }
+
+  const data = (await res.json()) as {
+    email?: string;
+    name?: string;
+    picture?: string;
+    sub?: string;
+  };
+
+  return {
+    email: data.email ?? "",
+    name: data.name ?? "",
+    picture: data.picture,
+    sub: data.sub,
   };
 }
 

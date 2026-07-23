@@ -1,23 +1,61 @@
 import { NextResponse } from "next/server";
-import { exchangeCodeForTokens, isGoogleConfigured } from "@/lib/google";
+import {
+  exchangeCodeForTokens,
+  getGoogleUserInfo,
+  isGoogleConfigured,
+} from "@/lib/google";
+
+function safeReturnTo(raw: string | null) {
+  if (!raw) return "/auth/callback";
+  try {
+    const decoded = decodeURIComponent(raw);
+    if (decoded.startsWith("/") && !decoded.startsWith("//")) {
+      return decoded;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "/auth/callback";
+}
 
 export async function GET(request: Request) {
   if (!isGoogleConfigured()) {
-    return NextResponse.redirect(new URL("/?google=missing", request.url));
+    return NextResponse.redirect(new URL("/login?google=missing", request.url));
   }
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
-  const returnTo = state ? decodeURIComponent(state) : "/";
+  const returnTo = safeReturnTo(state);
 
   if (!code) {
-    return NextResponse.redirect(new URL("/?google=denied", request.url));
+    return NextResponse.redirect(new URL("/login?google=denied", request.url));
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code);
-    const response = NextResponse.redirect(new URL(returnTo, request.url));
+    let userEmail = "";
+    let userName = "";
+    let userPicture = "";
+
+    try {
+      const profile = await getGoogleUserInfo(tokens.access_token);
+      userEmail = profile.email;
+      userName = profile.name;
+      userPicture = profile.picture ?? "";
+    } catch {
+      /* perfil opcional — tokens ainda são salvos para Meet */
+    }
+
+    const target = new URL(returnTo, request.url);
+    if (returnTo.startsWith("/auth/callback") || returnTo.startsWith("/login")) {
+      if (userEmail) target.searchParams.set("email", userEmail);
+      if (userName) target.searchParams.set("name", userName);
+      if (userPicture) target.searchParams.set("picture", userPicture);
+      target.searchParams.set("google", "ok");
+    }
+
+    const response = NextResponse.redirect(target);
 
     response.cookies.set("google_access_token", tokens.access_token, {
       httpOnly: true,
@@ -39,6 +77,6 @@ export async function GET(request: Request) {
 
     return response;
   } catch {
-    return NextResponse.redirect(new URL("/?google=error", request.url));
+    return NextResponse.redirect(new URL("/login?google=error", request.url));
   }
 }

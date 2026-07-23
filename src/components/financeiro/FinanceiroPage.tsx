@@ -68,6 +68,7 @@ export function FinanceiroPage() {
     receiveAppointment,
     saveCharge,
     createCharge,
+    removeCharge,
     renewalCount,
   } = useFinance();
   const [period, setPeriod] = useState<Period>("mes");
@@ -310,6 +311,15 @@ export function FinanceiroPage() {
             setEditing(null);
             setIsNew(false);
           }}
+          onDelete={
+            isNew
+              ? undefined
+              : (id) => {
+                  removeCharge(id);
+                  setEditing(null);
+                  setIsNew(false);
+                }
+          }
         />
       )}
     </div>

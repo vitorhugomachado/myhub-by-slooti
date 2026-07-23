@@ -1,35 +1,23 @@
 "use client";
 
-import { FileText, Pill, X } from "lucide-react";
+import { CreditCard, FileText, Pill, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
 import { useFinance } from "@/hooks/useFinance";
 import { AGENDA_TODAY, getAppointmentDate } from "@/lib/agenda";
+import { findPatientByName, needsPackageRenewal } from "@/lib/billing";
 import type { Appointment } from "@/lib/mock-data";
 import {
   addPendency,
   pendencyLabel,
   type PendencyType,
 } from "@/lib/pendencies";
-import { seedPatients, STORAGE_KEY, type Patient } from "@/lib/patients";
+import { ensurePatientByName } from "@/lib/patients";
 
-type Step = "confirm" | "followup" | "done";
+type Step = "confirm" | "payment" | "followup";
 
 type Choice = "now" | "later" | null;
-
-function resolvePatientId(name: string) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const list = raw ? (JSON.parse(raw) as Patient[]) : seedPatients;
-    return list.find(
-      (p) => p.fullName.toLowerCase() === name.toLowerCase(),
-    )?.id;
-  } catch {
-    return seedPatients.find(
-      (p) => p.fullName.toLowerCase() === name.toLowerCase(),
-    )?.id;
-  }
-}
 
 export function FinishSessionFlow({
   appointment,
@@ -41,11 +29,14 @@ export function FinishSessionFlow({
   onFinished: () => void;
 }) {
   const router = useRouter();
-  const { billSession } = useFinance();
+  const { billSession, paid, patientByName } = useFinance();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>("confirm");
   const [prontuario, setProntuario] = useState<Choice>(null);
   const [receita, setReceita] = useState<Choice>(null);
+
+  const date = getAppointmentDate(appointment.id) ?? AGENDA_TODAY;
+  const dated = { ...appointment, date };
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
@@ -62,10 +53,19 @@ export function FinishSessionFlow({
   }
 
   function confirmFinish() {
-    const date = getAppointmentDate(appointment.id) ?? AGENDA_TODAY;
-    billSession({ ...appointment, date });
+    const patient =
+      findPatientByName(appointment.patient) ??
+      ensurePatientByName(appointment.patient, {
+        avatar: appointment.avatar,
+      });
+    const skipPayment =
+      patient.billingMode === "pacote" &&
+      Number(patient.creditsLeft || 0) > 0 &&
+      !patient.renewalDue;
+
+    billSession(dated);
     onFinished();
-    setStep("followup");
+    setStep(skipPayment ? "followup" : "payment");
   }
 
   function choose(type: PendencyType, choice: "now" | "later") {
@@ -73,10 +73,11 @@ export function FinishSessionFlow({
     else setReceita(choice);
 
     if (choice === "later") {
+      const patient = patientByName(appointment.patient);
       addPendency({
         type,
         patientName: appointment.patient,
-        patientId: resolvePatientId(appointment.patient),
+        patientId: patient?.id,
         appointmentId: appointment.id,
       });
     }
@@ -102,6 +103,11 @@ export function FinishSessionFlow({
   }
 
   const bothChosen = prontuario !== null && receita !== null;
+  const isSettled = paid(appointment.id, {
+    date,
+    patientName: appointment.patient,
+  });
+  const renew = needsPackageRenewal(patientByName(appointment.patient));
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center p-3 sm:items-center sm:p-6">
@@ -128,9 +134,9 @@ export function FinishSessionFlow({
             <h2 className="text-base font-bold tracking-tight text-brand">
               {step === "confirm"
                 ? "Finalizar sessão?"
-                : step === "followup"
-                  ? "Sessão finalizada"
-                  : "Tudo certo"}
+                : step === "payment"
+                  ? "Registrar pagamento"
+                  : "Sessão finalizada"}
             </h2>
             <p className="mt-1 text-[13px] text-muted">
               {appointment.patient} · {appointment.start} – {appointment.end}
@@ -168,6 +174,29 @@ export function FinishSessionFlow({
                   Confirmar finalização
                 </button>
               </div>
+            </>
+          )}
+
+          {step === "payment" && (
+            <>
+              <div className="flex items-start gap-2 rounded-2xl border border-line bg-bg px-3.5 py-3">
+                <CreditCard className="mt-0.5 size-4 shrink-0 text-muted" />
+                <p className="text-[13px] leading-relaxed text-muted">
+                  {renew
+                    ? "Pacote esgotado — registre a renovação ou edite se houver imprevisto."
+                    : "A cobrança foi criada como pendente. Registre o recebimento agora ou continue e faça depois no Financeiro."}
+                </p>
+              </div>
+
+              <SessionPaymentPanel appointment={dated} />
+
+              <button
+                type="button"
+                onClick={() => setStep("followup")}
+                className="w-full rounded-full bg-orange py-3 text-[13px] font-bold text-brand"
+              >
+                {isSettled ? "Continuar" : "Continuar sem receber agora"}
+              </button>
             </>
           )}
 
@@ -224,42 +253,35 @@ function TaskChoice({
   onLater: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-bg p-4">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-surface-soft text-brand">
-          <Icon className="size-4" />
-        </span>
-        <h3 className="text-[14px] font-bold text-brand">{title}</h3>
+    <div className="rounded-2xl border border-line bg-bg p-3.5">
+      <div className="flex items-center gap-2">
+        <Icon className="size-4 text-muted" />
+        <p className="text-[13px] font-semibold text-brand">{title}</p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={onNow}
-          className={`rounded-full py-2.5 text-[12px] font-semibold transition-colors ${
+          className={`rounded-full py-2.5 text-[12px] font-semibold ${
             choice === "now"
               ? "bg-surface text-brand"
-              : "border border-line bg-card text-brand hover:bg-surface-soft"
+              : "border border-line bg-card text-muted hover:text-brand"
           }`}
         >
-          Preencher agora
+          Fazer agora
         </button>
         <button
           type="button"
           onClick={onLater}
-          className={`rounded-full py-2.5 text-[12px] font-semibold transition-colors ${
+          className={`rounded-full py-2.5 text-[12px] font-semibold ${
             choice === "later"
-              ? "bg-yellow/35 text-brand"
-              : "border border-line bg-card text-brand hover:bg-surface-soft"
+              ? "bg-surface text-brand"
+              : "border border-line bg-card text-muted hover:text-brand"
           }`}
         >
-          Preencher depois
+          Depois
         </button>
       </div>
-      {choice === "later" && (
-        <p className="mt-2 text-[11px] text-muted">
-          Vai para lembretes e fica pendente no cadastro.
-        </p>
-      )}
     </div>
   );
 }

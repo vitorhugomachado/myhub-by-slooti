@@ -5,52 +5,75 @@ import type { DatedAppointment } from "@/lib/agenda";
 import {
   activeAppointments,
   cancelAppointment,
-  loadSchedule,
+  completeAppointment,
   rescheduleAppointment,
   saveSchedule,
   SCHEDULE_EVENT,
   seedSchedule,
 } from "@/lib/schedule";
 
+async function fetchSchedule(): Promise<DatedAppointment[]> {
+  const res = await fetch("/api/schedule", { credentials: "include" });
+  if (!res.ok) throw new Error("schedule_fetch_failed");
+  const data = (await res.json()) as { items: DatedAppointment[] };
+  saveSchedule(data.items);
+  return data.items;
+}
+
+async function persistSchedule(items: DatedAppointment[]) {
+  await fetch("/api/schedule", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ items }),
+  });
+  window.dispatchEvent(new Event(SCHEDULE_EVENT));
+}
+
 export function useSchedule() {
   const [items, setItems] = useState<DatedAppointment[]>(seedSchedule);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    function sync() {
-      setItems(loadSchedule());
+    let cancelled = false;
+    async function sync() {
+      try {
+        const next = await fetchSchedule();
+        if (!cancelled) setItems(next);
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
     }
-    sync();
-    setHydrated(true);
-    window.addEventListener(SCHEDULE_EVENT, sync);
-    window.addEventListener("storage", sync);
+    void sync();
+    window.addEventListener(SCHEDULE_EVENT, () => void sync());
     return () => {
-      window.removeEventListener(SCHEDULE_EVENT, sync);
-      window.removeEventListener("storage", sync);
+      cancelled = true;
     };
   }, []);
 
-  const commit = useCallback((next: DatedAppointment[]) => {
-    setItems(next);
-    saveSchedule(next);
+  const cancel = useCallback((id: number) => {
+    setItems((prev) => {
+      const next = cancelAppointment(prev, id);
+      void persistSchedule(next);
+      return next;
+    });
   }, []);
 
-  const cancel = useCallback(
-    (id: number) => {
-      setItems((prev) => {
-        const next = cancelAppointment(prev, id);
-        saveSchedule(next);
-        return next;
-      });
-    },
-    [],
-  );
+  const complete = useCallback((id: number) => {
+    setItems((prev) => {
+      const next = completeAppointment(prev, id);
+      void persistSchedule(next);
+      return next;
+    });
+  }, []);
 
   const reschedule = useCallback(
     (id: number, patch: { date: string; start: string; end?: string }) => {
       setItems((prev) => {
         const next = rescheduleAppointment(prev, id, patch);
-        saveSchedule(next);
+        void persistSchedule(next);
         return next;
       });
     },
@@ -82,6 +105,7 @@ export function useSchedule() {
     active,
     hydrated,
     cancel,
+    complete,
     reschedule,
     forDate,
     appointmentDates,

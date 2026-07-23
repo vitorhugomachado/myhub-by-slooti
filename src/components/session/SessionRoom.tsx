@@ -21,8 +21,20 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import type { Appointment, PatientProfile } from "@/lib/mock-data";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
+import { useFinance } from "@/hooks/useFinance";
+import { useSchedule } from "@/hooks/useSchedule";
+import {
+  AGENDA_TODAY,
+  getAppointmentDate,
+  type DatedAppointment,
+} from "@/lib/agenda";
+import {
+  formatDateBr,
+  formatPatientSince,
+} from "@/lib/patients";
+import type { Appointment } from "@/lib/mock-data";
 
 type MeetLink = {
   meetingUri: string;
@@ -44,13 +56,13 @@ const tabs: { id: TabId; label: string; icon: typeof Video }[] = [
   { id: "pagamento", label: "Pagamento", icon: CreditCard },
 ];
 
-export function SessionRoom({
-  appointment,
-  profile,
-}: {
-  appointment: Appointment;
-  profile: PatientProfile;
-}) {
+function phoneDigits(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+export function SessionRoom({ appointment }: { appointment: Appointment }) {
+  const { patientByName } = useFinance();
+  const { items } = useSchedule();
   const [tab, setTab] = useState<TabId>("sessao");
   const [meet, setMeet] = useState<MeetLink | null>(null);
   const [status, setStatus] = useState<GoogleStatus | null>(null);
@@ -59,6 +71,34 @@ export function SessionRoom({
   const [canShare, setCanShare] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
+
+  const dated = useMemo<DatedAppointment>(() => {
+    const live = items.find((a) => a.id === appointment.id);
+    if (live) return live;
+    const date = getAppointmentDate(appointment.id) ?? AGENDA_TODAY;
+    return { ...appointment, date };
+  }, [appointment, items]);
+
+  const patient = patientByName(dated.patient);
+  const displayName =
+    patient?.socialName || patient?.fullName || dated.patient;
+  const email = patient?.email || "—";
+  const phone = patient?.whatsapp || patient?.phone || "";
+  const phoneTel = phoneDigits(phone);
+  const birthDate = patient?.birthDate
+    ? formatDateBr(patient.birthDate)
+    : "—";
+  const cpf = patient?.cpf || "—";
+  const since = patient?.startedAt
+    ? formatPatientSince(patient.startedAt)
+    : "—";
+  const notes =
+    patient?.notes ||
+    patient?.chiefComplaint ||
+    "Cadastro básico. Complete os dados em Pacientes.";
+  const cadastroHref = patient
+    ? `/pacientes?id=${encodeURIComponent(patient.id)}`
+    : `/pacientes?name=${encodeURIComponent(dated.patient)}`;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
@@ -112,7 +152,7 @@ export function SessionRoom({
   }, [appointment.id]);
 
   const shareText = meet
-    ? `Olá, ${appointment.patient}! Segue o link da nossa sessão de hoje (${appointment.start}):\n${meet.meetingUri}\n\nAté já — MyHub`
+    ? `Olá, ${dated.patient}! Segue o link da nossa sessão de hoje (${appointment.start}):\n${meet.meetingUri}\n\nAté já — MyHub`
     : "";
 
   async function copyLink() {
@@ -124,17 +164,17 @@ export function SessionRoom({
 
   function shareWhatsApp() {
     if (!meet) return;
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(shareText)}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const href = phoneTel
+      ? `https://wa.me/55${phoneTel}?text=${encodeURIComponent(shareText)}`
+      : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    window.open(href, "_blank", "noopener,noreferrer");
   }
 
   function shareEmail() {
     if (!meet) return;
     const subject = `Link da sessão — ${appointment.start}`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shareText)}`;
+    const to = patient?.email ? `${patient.email}` : "";
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shareText)}`;
   }
 
   async function nativeShare() {
@@ -163,7 +203,6 @@ export function SessionRoom({
         entered ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
       }`}
     >
-      {/* Top bar */}
       <header className="sticky top-0 z-20 border-b border-line bg-card/95 px-4 py-3 backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-3">
           <Link
@@ -180,7 +219,11 @@ export function SessionRoom({
                 isLive ? "bg-orange text-brand" : "bg-surface-soft text-brand"
               }`}
             >
-              {isLive ? "Em atendimento" : appointment.status === "upcoming" ? "Próxima" : "Concluída"}
+              {isLive
+                ? "Em atendimento"
+                : appointment.status === "upcoming"
+                  ? "Próxima"
+                  : "Concluída"}
             </span>
             <span className="hidden text-[13px] font-medium text-muted sm:inline">
               {appointment.start} – {appointment.end}
@@ -190,20 +233,19 @@ export function SessionRoom({
       </header>
 
       <div className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:gap-5">
-        {/* Patient sidebar */}
         <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[320px]">
           <article className="card p-5">
             <div className="flex items-center gap-3.5">
               <Image
-                src={appointment.avatar}
-                alt={profile.fullName}
+                src={patient?.avatar || appointment.avatar}
+                alt={displayName}
                 width={64}
                 height={64}
                 className="size-16 rounded-2xl object-cover"
               />
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-bold tracking-tight text-brand">
-                  {profile.fullName}
+                  {displayName}
                 </h1>
                 <p className="mt-0.5 text-[13px] text-muted">{appointment.type}</p>
               </div>
@@ -216,7 +258,7 @@ export function SessionRoom({
                   <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                     E-mail
                   </dt>
-                  <dd className="font-medium text-brand">{profile.email}</dd>
+                  <dd className="font-medium text-brand">{email}</dd>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
@@ -225,7 +267,9 @@ export function SessionRoom({
                   <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                     Telefone
                   </dt>
-                  <dd className="font-medium text-brand">{profile.phone}</dd>
+                  <dd className="font-medium text-brand">
+                    {phone || "Sem telefone"}
+                  </dd>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
@@ -235,7 +279,7 @@ export function SessionRoom({
                     Nascimento · CPF
                   </dt>
                   <dd className="font-medium text-brand">
-                    {profile.birthDate} · {profile.cpf}
+                    {birthDate} · {cpf}
                   </dd>
                 </div>
               </div>
@@ -250,7 +294,7 @@ export function SessionRoom({
                     Modalidade · Paciente desde
                   </dt>
                   <dd className="font-medium text-brand">
-                    {appointment.mode} · {profile.since}
+                    {appointment.mode} · {since}
                   </dd>
                 </div>
               </div>
@@ -261,13 +305,13 @@ export function SessionRoom({
                 Nota rápida
               </p>
               <p className="mt-1 text-[13px] leading-relaxed text-brand">
-                {profile.notes}
+                {notes}
               </p>
             </div>
           </article>
 
           <Link
-            href="/pacientes"
+            href={cadastroHref}
             className="card inline-flex items-center justify-center gap-2 p-3.5 text-[13px] font-semibold text-brand transition-colors hover:bg-surface-soft"
           >
             <ClipboardList className="size-4" />
@@ -275,7 +319,6 @@ export function SessionRoom({
           </Link>
         </aside>
 
-        {/* Main panel */}
         <section className="flex min-w-0 flex-1 flex-col gap-4">
           <nav className="card flex flex-wrap gap-1 p-1.5">
             {tabs.map((item) => {
@@ -306,7 +349,8 @@ export function SessionRoom({
                   Atendimento virtual
                 </h2>
                 <p className="mt-1 text-[13px] text-muted">
-                  Gere o link do Meet, compartilhe com o paciente e abra a reunião em outra aba.
+                  Gere o link do Meet, compartilhe com o paciente e abra a reunião
+                  em outra aba.
                 </p>
               </div>
 
@@ -356,7 +400,11 @@ export function SessionRoom({
                       onClick={() => void copyLink()}
                       className="inline-flex items-center justify-center gap-1.5 rounded-full border border-line bg-bg py-2.5 text-[12px] font-semibold text-brand hover:bg-surface-soft"
                     >
-                      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      {copied ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
                       {copied ? "Copiado" : "Copiar"}
                     </button>
                     <button
@@ -375,7 +423,7 @@ export function SessionRoom({
                       <Mail className="size-3.5" />
                       E-mail
                     </button>
-                    {canShare && (
+                    {canShare ? (
                       <button
                         type="button"
                         onClick={() => void nativeShare()}
@@ -384,18 +432,28 @@ export function SessionRoom({
                         <Share2 className="size-3.5" />
                         Compartilhar
                       </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={openMeet}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-full bg-orange py-2.5 text-[12px] font-bold text-brand"
+                      >
+                        <ExternalLink className="size-3.5" />
+                        Abrir Meet
+                      </button>
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={openMeet}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-orange py-3.5 text-[14px] font-bold text-brand transition-opacity hover:opacity-90"
-                  >
-                    <Video className="size-4" />
-                    Abrir Meet
-                    <ExternalLink className="size-3.5 opacity-70" />
-                  </button>
+                  {canShare && (
+                    <button
+                      type="button"
+                      onClick={openMeet}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-orange py-3 text-[13px] font-bold text-brand"
+                    >
+                      <Video className="size-4" />
+                      Abrir Meet
+                    </button>
+                  )}
                 </>
               )}
 
@@ -424,11 +482,17 @@ export function SessionRoom({
           )}
 
           {tab === "pagamento" && (
-            <ComingSoon
-              icon={CreditCard}
-              title="Pagamento"
-              description="Controle de sessões pagas, pendentes e recibimentos. Este módulo será criado em seguida."
-            />
+            <article className="card flex flex-1 flex-col gap-4 p-5 sm:p-6">
+              <div>
+                <h2 className="text-[15px] font-bold tracking-tight text-brand">
+                  Pagamento
+                </h2>
+                <p className="mt-1 text-[13px] text-muted">
+                  Registre ou edite o recebimento desta sessão.
+                </p>
+              </div>
+              <SessionPaymentPanel appointment={dated} />
+            </article>
           )}
         </section>
       </div>
@@ -451,7 +515,9 @@ function ComingSoon({
         <Icon className="size-6" />
       </span>
       <h2 className="text-lg font-bold tracking-tight text-brand">{title}</h2>
-      <p className="max-w-md text-[13px] leading-relaxed text-muted">{description}</p>
+      <p className="max-w-md text-[13px] leading-relaxed text-muted">
+        {description}
+      </p>
       <span className="mt-2 rounded-full bg-bg px-3 py-1 text-[11px] font-semibold text-muted">
         Em breve
       </span>

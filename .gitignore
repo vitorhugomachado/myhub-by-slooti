@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma / agent skill noise
+src/generated/
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
+
+/src/generated/prisma

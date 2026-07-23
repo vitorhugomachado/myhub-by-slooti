@@ -10,13 +10,13 @@ import { Reminders } from "@/components/dashboard/Reminders";
 import { TodayTimeline } from "@/components/dashboard/TodayTimeline";
 import { UpcomingDays } from "@/components/dashboard/UpcomingDays";
 import { Welcome } from "@/components/dashboard/Welcome";
-import type { Appointment, UpcomingDay } from "@/lib/mock-data";
+import type { DatedAppointment, LiveUpcomingDay } from "@/lib/agenda";
 
 export function HomeDashboard() {
-  const [selectedPatient, setSelectedPatient] = useState<Appointment | null>(
+  const [selectedPatient, setSelectedPatient] = useState<DatedAppointment | null>(
     null,
   );
-  const [selectedDay, setSelectedDay] = useState<UpcomingDay | null>(null);
+  const [selectedDay, setSelectedDay] = useState<LiveUpcomingDay | null>(null);
 
   return (
     <>
@@ -46,7 +46,6 @@ export function HomeDashboard() {
           onClose={() => setSelectedDay(null)}
           onSelectPatient={(appointment) => {
             setSelectedDay(null);
-            // pequeno delay para a animação de fechar o dia antes de abrir o paciente
             window.setTimeout(() => setSelectedPatient(appointment), 180);
           }}
         />

@@ -14,7 +14,9 @@ export const PENDENCIES_KEY = "myhub_pendencies_v1";
 export const PENDENCIES_EVENT = "myhub:pendencies";
 
 export function pendencyLabel(type: PendencyType) {
-  return type === "prontuario" ? "Preencher prontuário" : "Preencher receita saúde";
+  return type === "prontuario"
+    ? "Preencher relato da sessão"
+    : "Preencher receita saúde";
 }
 
 export function loadPendencies(): Pendency[] {
@@ -55,6 +57,23 @@ export function addPendency(
   const updated = [next, ...items];
   savePendencies(updated);
   return updated;
+}
+
+export function markPendencyDone(id: string) {
+  const items = loadPendencies();
+  const updated = items.map((p) =>
+    p.id === id ? { ...p, status: "done" as const } : p,
+  );
+  savePendencies(updated);
+  return updated;
+}
+
+export function pendencyHref(p: Pendency) {
+  const patient = encodeURIComponent(p.patientName);
+  if (p.type === "prontuario") {
+    return `/prontuario/novo?appointmentId=${p.appointmentId}&patient=${patient}`;
+  }
+  return `/receita-saude/nova?appointmentId=${p.appointmentId}&patient=${patient}`;
 }
 
 export function getPendingForPatient(patientName: string) {

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CalendarDays,
   Check,
   Copy,
   CreditCard,
@@ -17,27 +18,27 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { ChargeEditDrawer } from "@/components/financeiro/ChargeEditDrawer";
-import { BillingBadge, RenewalPill } from "@/components/shared/BillingBadge";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RescheduleDialog } from "@/components/sessoes/SessionManageDialogs";
+import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
 import { PaidMark } from "@/components/shared/PaidMark";
+import { RenewalPill } from "@/components/shared/BillingBadge";
 import { useFinance } from "@/hooks/useFinance";
+import { useSchedule } from "@/hooks/useSchedule";
 import {
   AGENDA_TODAY,
   getAppointmentDate,
   type DatedAppointment,
 } from "@/lib/agenda";
-import { billingModeLabel, needsPackageRenewal } from "@/lib/billing";
+import { needsPackageRenewal } from "@/lib/billing";
+import { formatFinanceDate } from "@/lib/finance";
 import {
-  DEFAULT_SESSION_VALUE,
-  formatBRL,
-  kindFinanceLabel,
-  type FinanceCharge,
-} from "@/lib/finance";
-import {
-  getPatientProfile,
-  type Appointment,
-} from "@/lib/mock-data";
+  getReportsForPatient,
+  SESSION_REPORTS_EVENT,
+  type SessionReport,
+} from "@/lib/session-reports";
+import { setStoredMeetLink } from "@/lib/meet-store";
+import type { Appointment } from "@/lib/mock-data";
 
 type MeetLink = {
   meetingUri: string;
@@ -46,28 +47,49 @@ type MeetLink = {
 
 type TabId = "sessao" | "prontuarios" | "historico" | "pagamento";
 
+function phoneDigits(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
 export function QuickPatientCard({
   appointment,
   onClose,
 }: {
-  appointment: Appointment;
+  appointment: Appointment | DatedAppointment;
   onClose: () => void;
 }) {
-  const profile = getPatientProfile(appointment.id)!;
-  const {
-    paid,
-    entryFor,
-    receiveAppointment,
-    patientByName,
-    saveCharge,
-  } = useFinance();
+  const { paid, patientByName } = useFinance();
+  const { items, reschedule } = useSchedule();
   const [visible, setVisible] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [tab, setTab] = useState<TabId>("sessao");
   const [meet, setMeet] = useState<MeetLink | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reports, setReports] = useState<SessionReport[]>([]);
+
+  const dated = useMemo<DatedAppointment>(() => {
+    const live = items.find((a) => a.id === appointment.id);
+    if (live) return live;
+    const date =
+      "date" in appointment && appointment.date
+        ? appointment.date
+        : (getAppointmentDate(appointment.id) ?? AGENDA_TODAY);
+    return { ...appointment, date };
+  }, [appointment, items]);
+
+  const patient = patientByName(dated.patient);
+  const displayName = patient?.socialName || patient?.fullName || dated.patient;
+  const phone = patient?.whatsapp || patient?.phone || "";
+  const phoneTel = phoneDigits(phone);
+  const notes =
+    patient?.notes ||
+    patient?.chiefComplaint ||
+    "Sem observações cadastradas. Complete o cadastro do paciente.";
+  const cadastroHref = patient
+    ? `/pacientes?id=${encodeURIComponent(patient.id)}`
+    : `/pacientes?name=${encodeURIComponent(dated.patient)}`;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
@@ -88,13 +110,44 @@ export function QuickPatientCard({
     setTab("sessao");
     setMeet(null);
     setError(null);
-    void fetch(`/api/meet/create?appointmentId=${appointment.id}`)
+    void fetch(`/api/meet/create?appointmentId=${dated.id}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.link) setMeet(data.link);
+        if (data.link) {
+          setMeet(data.link);
+          setStoredMeetLink(dated.id, data.link);
+        }
       });
-  }, [appointment.id]);
+  }, [dated.id]);
 
+  useEffect(() => {
+    function syncReports() {
+      setReports(getReportsForPatient(dated.patient));
+    }
+    syncReports();
+    window.addEventListener(SESSION_REPORTS_EVENT, syncReports);
+    window.addEventListener("storage", syncReports);
+    return () => {
+      window.removeEventListener(SESSION_REPORTS_EVENT, syncReports);
+      window.removeEventListener("storage", syncReports);
+    };
+  }, [dated.patient]);
+
+  const history = useMemo(
+    () =>
+      items
+        .filter(
+          (a) =>
+            a.patient.toLowerCase() === dated.patient.toLowerCase() &&
+            a.status !== "cancelled",
+        )
+        .sort((a, b) => {
+          const byDate = b.date.localeCompare(a.date);
+          if (byDate !== 0) return byDate;
+          return b.start.localeCompare(a.start);
+        }),
+    [items, dated.patient],
+  );
   function handleClose() {
     setVisible(false);
     window.setTimeout(onClose, 200);
@@ -107,7 +160,7 @@ export function QuickPatientCard({
       const res = await fetch("/api/meet/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId: appointment.id }),
+        body: JSON.stringify({ appointmentId: dated.id }),
       });
       const data = await res.json();
 
@@ -122,16 +175,23 @@ export function QuickPatientCard({
       }
 
       setMeet(data);
+      setStoredMeetLink(dated.id, data);
     } catch {
       setError("Erro de rede ao gerar o link");
     } finally {
       setLoading(false);
     }
-  }, [appointment.id]);
+  }, [dated.id]);
 
   const shareText = meet
-    ? `Olá, ${appointment.patient}! Segue o link da nossa sessão (${appointment.start}):\n${meet.meetingUri}\n\nAté já — MyHub`
+    ? `Olá, ${dated.patient}! Segue o link da nossa sessão (${dated.start}):\n${meet.meetingUri}\n\nAté já — MyHub`
     : "";
+
+  const whatsappHref = phoneTel
+    ? `https://wa.me/55${phoneTel}${meet ? `?text=${encodeURIComponent(shareText)}` : ""}`
+    : meet
+      ? `https://wa.me/?text=${encodeURIComponent(shareText)}`
+      : `https://wa.me/`;
 
   async function copyLink() {
     if (!meet) return;
@@ -140,54 +200,13 @@ export function QuickPatientCard({
     window.setTimeout(() => setCopied(false), 2000);
   }
 
-  const isLive = appointment.status === "now";
-  const apptDate = getAppointmentDate(appointment.id) ?? AGENDA_TODAY;
-  const isPaid = paid(appointment.id, {
-    date: apptDate,
-    patientName: appointment.patient,
+  const isLive = dated.status === "now";
+  const isCancelled = dated.status === "cancelled";
+  const isPaid = paid(dated.id, {
+    date: dated.date,
+    patientName: dated.patient,
   });
-  const financeEntry = entryFor(appointment.id, {
-    date: apptDate,
-    patientName: appointment.patient,
-  });
-  const patient = patientByName(appointment.patient);
   const renew = needsPackageRenewal(patient);
-  const amount =
-    financeEntry?.kind === "consumo_pacote"
-      ? 0
-      : financeEntry?.amount ??
-        (renew
-          ? Number(patient?.packagePrice || DEFAULT_SESSION_VALUE)
-          : Number(patient?.sessionValue || DEFAULT_SESSION_VALUE));
-
-  function handleReceive() {
-    const dated: DatedAppointment = { ...appointment, date: apptDate };
-    receiveAppointment(dated, {
-      amount,
-      method: (patient?.paymentMethod || "Pix") as FinanceCharge["method"],
-    });
-  }
-
-  function openEdit() {
-    setEditOpen(true);
-  }
-
-  const editCharge: FinanceCharge =
-    financeEntry ??
-    ({
-      id: `f-appt-${appointment.id}`,
-      appointmentId: appointment.id,
-      patientId: patient?.id,
-      patientName: appointment.patient,
-      date: apptDate,
-      description: renew
-        ? `Renovação de pacote — ${appointment.type}`
-        : `Sessão — ${appointment.type}`,
-      amount,
-      method: (patient?.paymentMethod || "Pix") as FinanceCharge["method"],
-      status: "pendente",
-      kind: renew ? "renovacao_pacote" : "sessao_avulsa",
-    } satisfies FinanceCharge);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
@@ -203,7 +222,7 @@ export function QuickPatientCard({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Acesso rápido — ${profile.fullName}`}
+        aria-label={`Acesso rápido — ${displayName}`}
         className={`relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-line bg-card shadow-[0_24px_80px_rgba(20,22,26,0.18)] transition-all duration-300 ease-out ${
           visible
             ? "translate-y-0 scale-100 opacity-100"
@@ -213,8 +232,8 @@ export function QuickPatientCard({
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <Image
-              src={appointment.avatar}
-              alt={profile.fullName}
+              src={dated.avatar}
+              alt={displayName}
               width={48}
               height={48}
               className="size-12 shrink-0 rounded-2xl object-cover"
@@ -222,28 +241,32 @@ export function QuickPatientCard({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="truncate text-base font-bold tracking-tight text-brand">
-                  {profile.fullName}
+                  {displayName}
                 </h2>
                 {isPaid && <PaidMark />}
                 {renew && <RenewalPill />}
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    isLive
-                      ? "bg-orange text-brand"
-                      : appointment.status === "done"
-                        ? "bg-surface text-brand"
-                        : "bg-yellow/30 text-brand"
+                    isCancelled
+                      ? "bg-danger/15 text-danger"
+                      : isLive
+                        ? "bg-orange text-brand"
+                        : dated.status === "done"
+                          ? "bg-surface text-brand"
+                          : "bg-yellow/30 text-brand"
                   }`}
                 >
-                  {isLive
-                    ? "Agora"
-                    : appointment.status === "done"
-                      ? "Concluído"
-                      : "Próxima"}
+                  {isCancelled
+                    ? "Cancelada"
+                    : isLive
+                      ? "Agora"
+                      : dated.status === "done"
+                        ? "Concluído"
+                        : "Próxima"}
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[12px] text-muted">
-                {appointment.type} · {appointment.start} – {appointment.end}
+                {dated.type} · {dated.start} – {dated.end}
               </p>
             </div>
           </div>
@@ -293,29 +316,50 @@ export function QuickPatientCard({
                   <p className="font-semibold uppercase tracking-wide text-muted">
                     Contato
                   </p>
-                  <p className="mt-1 flex items-center gap-1.5 font-medium text-brand">
-                    <Phone className="size-3.5" />
-                    {profile.phone}
-                  </p>
+                  {phoneTel ? (
+                    <a
+                      href={`tel:+55${phoneTel}`}
+                      className="mt-1 flex items-center gap-1.5 font-medium text-brand hover:underline"
+                    >
+                      <Phone className="size-3.5" />
+                      {phone}
+                    </a>
+                  ) : (
+                    <p className="mt-1 flex items-center gap-1.5 font-medium text-muted">
+                      <Phone className="size-3.5" />
+                      Sem telefone
+                    </p>
+                  )}
                 </div>
                 <div className="rounded-2xl border border-line bg-bg p-3">
                   <p className="font-semibold uppercase tracking-wide text-muted">
                     Modalidade
                   </p>
                   <p className="mt-1 flex items-center gap-1.5 font-medium text-brand">
-                    {appointment.mode === "Online" ? (
+                    {dated.mode === "Online" ? (
                       <Video className="size-3.5" />
                     ) : (
                       <MapPin className="size-3.5" />
                     )}
-                    {appointment.mode}
+                    {dated.mode}
                   </p>
                 </div>
               </div>
 
               <p className="rounded-2xl border border-line bg-bg p-3 text-[13px] leading-relaxed text-brand">
-                {profile.notes}
+                {notes}
               </p>
+
+              {!isCancelled && (
+                <button
+                  type="button"
+                  onClick={() => setRescheduleOpen(true)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-bg py-3 text-[13px] font-semibold text-brand transition-colors hover:bg-surface-soft"
+                >
+                  <CalendarDays className="size-4" />
+                  Remarcar sessão
+                </button>
+              )}
 
               {!meet ? (
                 <button
@@ -353,11 +397,7 @@ export function QuickPatientCard({
                     <button
                       type="button"
                       onClick={() =>
-                        window.open(
-                          `https://wa.me/?text=${encodeURIComponent(shareText)}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        )
+                        window.open(whatsappHref, "_blank", "noopener,noreferrer")
                       }
                       className="inline-flex items-center justify-center gap-1 rounded-full border border-line bg-bg py-2 text-[11px] font-semibold text-brand"
                     >
@@ -387,139 +427,118 @@ export function QuickPatientCard({
           )}
 
           {tab === "prontuarios" && (
-            <Placeholder
-              icon={FileText}
-              title="Prontuários"
-              text="Módulo em construção. Em breve você registra evoluções por aqui."
-            />
-          )}
-          {tab === "historico" && (
-            <Placeholder
-              icon={History}
-              title="Registro de sessões"
-              text="Histórico completo será criado em seguida."
-            />
-          )}
-          {tab === "pagamento" && (
-            <div className="space-y-4">
-              {patient && (
-                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2.5">
-                  <BillingBadge patient={patient} />
-                  <span className="text-[12px] text-muted">
-                    Plano {billingModeLabel(patient.billingMode)}
-                    {patient.billingMode === "pacote"
-                      ? ` · ${patient.creditsLeft} crédito(s)`
-                      : ` · R$ ${patient.sessionValue || DEFAULT_SESSION_VALUE}/sessão`}
-                  </span>
-                </div>
-              )}
-
-              {renew && (
-                <p className="rounded-2xl border border-orange/20 bg-orange/10 px-4 py-3 text-[13px] text-brand">
-                  Pacote esgotado. Na próxima sessão o paciente precisa pagar a
-                  renovação (editável se houver imprevisto).
+            <div className="space-y-3">
+              <Link
+                href={`/prontuario/novo?appointmentId=${dated.id}&patient=${encodeURIComponent(dated.patient)}`}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface py-3 text-[13px] font-bold text-brand"
+              >
+                <FileText className="size-4" />
+                Novo relato da sessão
+              </Link>
+              {reports.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-muted">
+                  Nenhum relato salvo para este paciente.
                 </p>
+              ) : (
+                <ul className="space-y-2">
+                  {reports.map((r) => (
+                    <li
+                      key={r.id}
+                      className="rounded-2xl border border-line bg-bg p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[13px] font-semibold text-brand">
+                          {formatFinanceDate(r.date)}
+                          {r.start ? ` · ${r.start}` : ""}
+                        </p>
+                        <Link
+                          href={`/prontuario/novo?appointmentId=${r.appointmentId}&patient=${encodeURIComponent(r.patientName)}`}
+                          className="text-[11px] font-semibold text-muted hover:text-brand"
+                        >
+                          Abrir
+                        </Link>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[12px] text-muted">
+                        {r.summary}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
               )}
-
-              <div className="rounded-2xl border border-line bg-bg p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                      {financeEntry
-                        ? kindFinanceLabel(financeEntry.kind)
-                        : renew
-                          ? "Renovação de pacote"
-                          : "Sessão"}
-                    </p>
-                    <p className="mt-1 text-[14px] font-semibold text-brand">
-                      {appointment.type}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-muted">
-                      {appointment.start} – {appointment.end}
-                      {financeEntry?.method ? ` · ${financeEntry.method}` : ""}
-                    </p>
-                  </div>
-                  {isPaid && <PaidMark className="size-7 text-[13px]" />}
-                </div>
-                <p className="mt-4 text-2xl font-bold tabular-nums text-brand">
-                  {financeEntry?.kind === "consumo_pacote"
-                    ? "1 crédito"
-                    : formatBRL(amount)}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {!isPaid && (
-                  <button
-                    type="button"
-                    onClick={handleReceive}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface py-3 text-[13px] font-bold text-brand transition-opacity hover:opacity-90"
-                  >
-                    <Check className="size-4" />
-                    Registrar recebimento
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={openEdit}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-bg py-3 text-[13px] font-semibold text-brand"
-                >
-                  Editar recebimento
-                </button>
-                {isPaid && (
-                  <p className="text-center text-[12px] font-medium text-muted">
-                    Recebimento confirmado — você ainda pode editar.
-                  </p>
-                )}
-              </div>
             </div>
           )}
+          {tab === "historico" && (
+            <div className="space-y-2">
+              {history.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-muted">
+                  Nenhuma sessão registrada.
+                </p>
+              ) : (
+                history.map((h) => (
+                  <div
+                    key={`${h.date}-${h.id}`}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-bg p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-brand">
+                        {formatFinanceDate(h.date)} · {h.start} – {h.end}
+                      </p>
+                      <p className="truncate text-[11px] text-muted">
+                        {h.type} · {h.mode}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        h.status === "done"
+                          ? "bg-surface text-brand"
+                          : h.status === "now"
+                            ? "bg-orange text-brand"
+                            : "bg-yellow/30 text-brand"
+                      }`}
+                    >
+                      {h.status === "done"
+                        ? "Concluída"
+                        : h.status === "now"
+                          ? "Agora"
+                          : "Próxima"}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}          {tab === "pagamento" && <SessionPaymentPanel appointment={dated} />}
         </div>
 
         <div className="border-t border-line px-5 py-3">
-          <Link
-            href={`/sessao/${appointment.id}`}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-bg py-2.5 text-[13px] font-semibold text-brand transition-colors hover:bg-surface-soft"
-          >
-            Abrir tela completa
-            <ExternalLink className="size-3.5" />
-          </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              href={cadastroHref}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-line bg-bg py-2.5 text-[12px] font-semibold text-brand transition-colors hover:bg-surface-soft"
+            >
+              Cadastro
+            </Link>
+            <Link
+              href={`/sessao/${dated.id}`}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-line bg-bg py-2.5 text-[12px] font-semibold text-brand transition-colors hover:bg-surface-soft"
+            >
+              Tela completa
+              <ExternalLink className="size-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
 
-      {editOpen && (
-        <ChargeEditDrawer
-          charge={editCharge}
-          onClose={() => setEditOpen(false)}
-          onSave={(charge) => {
-            saveCharge(charge);
-            setEditOpen(false);
+      {rescheduleOpen && (
+        <RescheduleDialog
+          appointment={dated}
+          onClose={() => setRescheduleOpen(false)}
+          onSave={(patch) => {
+            reschedule(dated.id, patch);
+            setRescheduleOpen(false);
+            handleClose();
           }}
         />
       )}
-    </div>
-  );
-}
-
-function Placeholder({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: typeof FileText;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2 py-10 text-center">
-      <span className="flex size-12 items-center justify-center rounded-2xl bg-surface-soft text-brand">
-        <Icon className="size-5" />
-      </span>
-      <h3 className="text-[15px] font-bold text-brand">{title}</h3>
-      <p className="max-w-xs text-[12px] leading-relaxed text-muted">{text}</p>
-      <span className="mt-1 rounded-full bg-bg px-2.5 py-1 text-[10px] font-semibold text-muted">
-        Em breve
-      </span>
     </div>
   );
 }

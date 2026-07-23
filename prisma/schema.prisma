@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @default("")
+  provider     String   @default("email")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile      Profile?
+  patients     Patient[]
+  charges      FinanceCharge[]
+  appointments Appointment[]
+  pendencies   Pendency[]
+  reports      SessionReport[]
+}
+
+model Profile {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data   Json
+  updatedAt DateTime @updatedAt
+}
+
+model Patient {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatar           String   @default("")
+  fullName         String
+  socialName       String   @default("")
+  email            String   @default("")
+  phone            String   @default("")
+  whatsapp         String   @default("")
+  birthDate        String   @default("")
+  cpf              String   @default("")
+  rg               String   @default("")
+  gender           String   @default("")
+  maritalStatus    String   @default("")
+  zip              String   @default("")
+  street           String   @default("")
+  number           String   @default("")
+  complement       String   @default("")
+  neighborhood     String   @default("")
+  city             String   @default("")
+  state            String   @default("")
+  emergencyName    String   @default("")
+  emergencyPhone   String   @default("")
+  emergencyRelation String  @default("")
+  isMinor          Boolean  @default(false)
+  guardianName     String   @default("")
+  guardianCpf      String   @default("")
+  guardianPhone    String   @default("")
+  chiefComplaint   String   @default("")
+  clinicalHistory  String   @default("")
+  medications      String   @default("")
+  allergies        String   @default("")
+  diagnosis        String   @default("")
+  approach         String   @default("TCC")
+  referralSource   String   @default("")
+  status           String   @default("ativo")
+  preferredMode    String   @default("Online")
+  sessionFrequency String   @default("Semanal")
+  sessionValue     String   @default("")
+  paymentMethod    String   @default("Pix")
+  billingMode      String   @default("avulso")
+  packageSize      String   @default("4")
+  creditsLeft      String   @default("0")
+  packagePrice     String   @default("")
+  renewalDue       Boolean  @default(false)
+  lgpdConsent      Boolean  @default(false)
+  notes            String   @default("")
+  startedAt        String   @default("")
+  createdAt        String   @default("")
+  updatedAt        DateTime @updatedAt
+
+  charges FinanceCharge[]
+
+  @@index([userId])
+  @@index([userId, fullName])
+}
+
+model FinanceCharge {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patientId            String?
+  patient              Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  patientName          String
+  appointmentId        Int?
+  date                 String
+  description          String
+  amount               Float    @default(0)
+  method               String   @default("Pix")
+  status               String   @default("pendente")
+  kind                 String   @default("sessao_avulsa")
+  note                 String   @default("")
+  isPackageLastSession Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, date])
+  @@index([userId, appointmentId])
+}
+
+model Appointment {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String
+  start     String
+  end       String
+  patient   String
+  type      String
+  mode      String
+  status    String   @default("upcoming")
+  avatar    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, date])
+}
+
+model Pendency {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          String
+  patientName   String
+  patientId     String?
+  appointmentId Int?
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model SessionReport {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointmentId Int?
+  patientName   String
+  date          String
+  start         String   @default("")
+  summary       String   @default("")
+  content       String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, patientName])
+}

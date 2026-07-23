@@ -7,17 +7,16 @@ import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
 import { useFinance } from "@/hooks/useFinance";
 import { needsPackageRenewal } from "@/lib/billing";
-import { getAppointmentDate } from "@/lib/agenda";
-import type { Appointment, UpcomingDay } from "@/lib/mock-data";
+import type { DatedAppointment, LiveUpcomingDay } from "@/lib/agenda";
 
 export function DayAgendaCard({
   day,
   onClose,
   onSelectPatient,
 }: {
-  day: UpcomingDay;
+  day: LiveUpcomingDay;
   onClose: () => void;
-  onSelectPatient: (appointment: Appointment) => void;
+  onSelectPatient: (appointment: DatedAppointment) => void;
 }) {
   const [visible, setVisible] = useState(false);
   const { paid, patientByName } = useFinance();
@@ -78,7 +77,7 @@ export function DayAgendaCard({
                 {day.day}
               </h2>
               <p className="mt-0.5 text-[12px] text-muted">
-                {day.count} sessões · {day.range}
+                {day.count} sessão{day.count === 1 ? "" : "ões"} · {day.range}
               </p>
             </div>
           </div>
@@ -112,7 +111,7 @@ export function DayAgendaCard({
                       {item.patient}
                     </p>
                     {paid(item.id, {
-                      date: getAppointmentDate(item.id),
+                      date: item.date,
                       patientName: item.patient,
                     }) && <PaidMark />}
                     {needsPackageRenewal(patientByName(item.patient)) && (

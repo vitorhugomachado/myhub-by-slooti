@@ -352,11 +352,66 @@ export function savePatients(patients: Patient[]) {
   window.dispatchEvent(new Event(PATIENTS_EVENT));
 }
 
+export function ensurePatientSaved(patient: Patient) {
+  const patients = loadPatients();
+  const idx = patients.findIndex((p) => p.id === patient.id);
+  if (idx < 0) {
+    savePatients([patient, ...patients]);
+    return;
+  }
+  const list = [...patients];
+  list[idx] = patient;
+  savePatients(list);
+}
+
+/** Cria cadastro mínimo se o nome da agenda ainda não existir. */
+export function ensurePatientByName(
+  fullName: string,
+  opts?: { avatar?: string },
+): Patient {
+  const list = loadPatients();
+  const existing = list.find(
+    (p) => p.fullName.toLowerCase() === fullName.trim().toLowerCase(),
+  );
+  if (existing) return existing;
+
+  const slug = fullName
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 32);
+  const stub = normalizePatient({
+    id: `p-${slug || "paciente"}-${Date.now().toString(36)}`,
+    fullName: fullName.trim(),
+    avatar:
+      opts?.avatar ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName.trim())}&background=7dffb3&color=14161a&bold=true`,
+    notes:
+      "Cadastro criado a partir da agenda. Complete os dados do paciente.",
+  });
+  savePatients([stub, ...list]);
+  return stub;
+}
+
 export function formatDateBr(iso: string) {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
+}
+
+export function formatPatientSince(iso: string) {
+  if (!iso) return "—";
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "—";
+  const label = d.toLocaleDateString("pt-BR", {
+    month: "short",
+    year: "numeric",
+  });
+  return label.replace(".", "");
 }
 
 export function statusLabel(status: PatientStatus) {

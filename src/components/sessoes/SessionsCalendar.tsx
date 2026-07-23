@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, MapPin, Video, X } from "lucide-react";
+import { CalendarDays, MapPin, Video, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -169,8 +169,8 @@ export function SessionsCalendar({
                             onClick={() => setRescheduleTarget(appt)}
                             className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3 py-2 text-[12px] font-semibold text-brand transition-colors hover:bg-surface-soft"
                           >
-                            <Clock3 className="size-3.5" />
-                            Horário
+                            <CalendarDays className="size-3.5" />
+                            Remarcar
                           </button>
                           <button
                             type="button"

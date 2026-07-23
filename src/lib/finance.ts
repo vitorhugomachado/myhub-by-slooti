@@ -1,11 +1,14 @@
 import type { DatedAppointment } from "@/lib/agenda";
 import {
+  ensurePatientSaved,
   loadPatients,
   savePatients,
   type BillingMode,
   type Patient,
   type PaymentMethod,
 } from "@/lib/patients";
+
+export { ensurePatientSaved };
 
 export type ChargeKind =
   | "sessao_avulsa"
@@ -314,47 +317,57 @@ export function upsertCharge(
   return [...entries, charge];
 }
 
+/**
+ * Recebe pagamento alinhado às regras de pacote/avulso (via applySessionBilling).
+ * Não cria mais `sessao_avulsa` às cegas quando o paciente está em pacote.
+ */
 export function markAppointmentReceived(
   entries: FinanceCharge[],
   appointment: DatedAppointment,
+  patient: Patient | null,
   defaults?: { amount?: number; method?: FinanceMethod },
-): FinanceCharge[] {
-  const existing = findEntryForAppointment(entries, appointment.id, {
+): { entries: FinanceCharge[]; patient: Patient | null } {
+  const billed = applySessionBilling(entries, appointment, patient);
+  let nextEntries = billed.entries;
+  const nextPatient = billed.patient;
+
+  const existing = findEntryForAppointment(nextEntries, appointment.id, {
     date: appointment.date,
     patientName: appointment.patient,
   });
 
-  if (existing) {
-    return entries.map((e) =>
-      e.id === existing.id
-        ? {
-            ...e,
-            status: "pago" as const,
-            appointmentId: e.appointmentId ?? appointment.id,
-            amount:
-              e.kind === "consumo_pacote"
-                ? e.amount
-                : defaults?.amount ?? e.amount,
-            method: defaults?.method ?? e.method,
-          }
-        : e,
-    );
+  if (!existing) {
+    return { entries: nextEntries, patient: nextPatient };
   }
 
-  return [
-    ...entries,
-    {
-      id: `f-appt-${appointment.id}`,
-      appointmentId: appointment.id,
-      patientName: appointment.patient,
-      date: appointment.date,
-      description: `Sessão — ${appointment.type}`,
-      amount: defaults?.amount ?? DEFAULT_SESSION_VALUE,
-      method: defaults?.method ?? "Pix",
-      status: "pago",
-      kind: "sessao_avulsa",
-    },
-  ];
+  if (isChargeSettled(existing)) {
+    return { entries: nextEntries, patient: nextPatient };
+  }
+
+  nextEntries = nextEntries.map((e) =>
+    e.id === existing.id
+      ? {
+          ...e,
+          status: "pago" as const,
+          appointmentId: e.appointmentId ?? appointment.id,
+          patientId: e.patientId ?? patient?.id,
+          amount:
+            e.kind === "consumo_pacote"
+              ? e.amount
+              : (defaults?.amount ?? e.amount),
+          method: defaults?.method ?? e.method,
+        }
+      : e,
+  );
+
+  return { entries: nextEntries, patient: nextPatient };
+}
+
+export function deleteCharge(
+  entries: FinanceCharge[],
+  chargeId: string,
+): FinanceCharge[] {
+  return entries.filter((e) => e.id !== chargeId);
 }
 
 export function parseMoney(value: string | number | undefined) {
@@ -480,15 +493,40 @@ export function applyChargeEditSideEffects(
   if (becamePaidRenewal) {
     const size = Number(patient.packageSize || 4);
     next = {
-      ...patient,
+      ...next,
       creditsLeft: String(size),
       renewalDue: false,
       packagePrice: String(charge.amount || patient.packagePrice),
     };
   }
 
-  if (charge.kind === "consumo_pacote" && previous?.kind !== "consumo_pacote") {
-    // switched to package consume manually — already handled by editor if needed
+  const switchedToConsume =
+    previous != null &&
+    charge.kind === "consumo_pacote" &&
+    previous.kind !== "consumo_pacote";
+  if (switchedToConsume) {
+    const credits = Number(next.creditsLeft || 0);
+    if (credits > 0) {
+      const left = credits - 1;
+      next = {
+        ...next,
+        creditsLeft: String(left),
+        renewalDue: left <= 0,
+      };
+    }
+  }
+
+  const switchedFromConsume =
+    previous != null &&
+    previous.kind === "consumo_pacote" &&
+    charge.kind !== "consumo_pacote";
+  if (switchedFromConsume) {
+    const credits = Number(next.creditsLeft || 0) + 1;
+    next = {
+      ...next,
+      creditsLeft: String(credits),
+      renewalDue: false,
+    };
   }
 
   if (next !== patient) {
@@ -498,14 +536,38 @@ export function applyChargeEditSideEffects(
   }
 }
 
-export function ensurePatientSaved(patient: Patient) {
+/** Reverte créditos ao excluir um lançamento. */
+export function applyChargeDeleteSideEffects(charge: FinanceCharge) {
+  if (!charge.patientId) return;
+
   const patients = loadPatients();
-  const idx = patients.findIndex((p) => p.id === patient.id);
-  if (idx < 0) {
-    savePatients([...patients, patient]);
-    return;
+  const idx = patients.findIndex((p) => p.id === charge.patientId);
+  if (idx < 0) return;
+
+  const patient = patients[idx];
+  let next = patient;
+
+  if (charge.kind === "consumo_pacote") {
+    const credits = Number(patient.creditsLeft || 0) + 1;
+    next = {
+      ...patient,
+      creditsLeft: String(credits),
+      renewalDue: false,
+    };
+  } else if (
+    charge.kind === "renovacao_pacote" &&
+    charge.status === "pago"
+  ) {
+    next = {
+      ...patient,
+      creditsLeft: "0",
+      renewalDue: true,
+    };
   }
-  const list = [...patients];
-  list[idx] = patient;
-  savePatients(list);
+
+  if (next !== patient) {
+    const list = [...patients];
+    list[idx] = next;
+    savePatients(list);
+  }
 }

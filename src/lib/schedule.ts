@@ -56,6 +56,15 @@ export function cancelAppointment(
   );
 }
 
+export function completeAppointment(
+  items: ScheduleItem[],
+  id: number,
+): ScheduleItem[] {
+  return items.map((a) =>
+    a.id === id ? { ...a, status: "done" as const } : a,
+  );
+}
+
 export function rescheduleAppointment(
   items: ScheduleItem[],
   id: number,
