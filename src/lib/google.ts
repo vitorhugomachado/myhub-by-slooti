@@ -1,4 +1,7 @@
 const SCOPES = [
+  // Calendar + Meet link (funciona com Gmail pessoal)
+  "https://www.googleapis.com/auth/calendar.events",
+  // Meet REST API (Workspace); mantido como fallback
   "https://www.googleapis.com/auth/meetings.space.created",
   "openid",
   "email",
@@ -186,4 +189,113 @@ export async function createMeetSpace(accessToken: string) {
     meetingUri: string;
     meetingCode: string;
   };
+}
+
+type CalendarMeetInput = {
+  summary: string;
+  date: string;
+  start: string;
+  end: string;
+  timeZone?: string;
+};
+
+/** Cria evento no Calendar com Google Meet (recomendado para Gmail). */
+export async function createMeetViaCalendar(
+  accessToken: string,
+  input: CalendarMeetInput,
+) {
+  const timeZone = input.timeZone ?? "America/Sao_Paulo";
+  const startTime = normalizeClock(input.start);
+  const endTime = normalizeClock(input.end);
+  const requestId = `neura-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const res = await fetch(
+    "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        summary: input.summary,
+        description: "Sessão criada pelo Neura",
+        start: {
+          dateTime: `${input.date}T${startTime}`,
+          timeZone,
+        },
+        end: {
+          dateTime: `${input.date}T${endTime}`,
+          timeZone,
+        },
+        conferenceData: {
+          createRequest: {
+            requestId,
+            conferenceSolutionKey: { type: "hangoutsMeet" },
+          },
+        },
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Falha ao criar Meet via Calendar: ${text}`);
+  }
+
+  const data = (await res.json()) as {
+    id?: string;
+    hangoutLink?: string;
+    conferenceData?: {
+      entryPoints?: Array<{ entryPointType?: string; uri?: string }>;
+    };
+  };
+
+  const meetingUri =
+    data.hangoutLink ||
+    data.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")
+      ?.uri;
+
+  if (!meetingUri) {
+    throw new Error("Google Calendar não retornou o link do Meet.");
+  }
+
+  return {
+    name: data.id ?? "",
+    meetingUri,
+    meetingCode: "",
+  };
+}
+
+function normalizeClock(value: string) {
+  const trimmed = value.trim();
+  if (/^\d{2}:\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{2}:\d{2}$/.test(trimmed)) return `${trimmed}:00`;
+  return trimmed;
+}
+
+/** Tenta Calendar (Gmail) e, se falhar por outro motivo, Meet REST. */
+export async function createMeetLink(
+  accessToken: string,
+  input: CalendarMeetInput,
+) {
+  try {
+    return await createMeetViaCalendar(accessToken, input);
+  } catch (calendarError) {
+    try {
+      return await createMeetSpace(accessToken);
+    } catch {
+      throw calendarError instanceof Error
+        ? calendarError
+        : new Error("Não foi possível criar o link do Meet.");
+    }
+  }
+}
+
+export function isGoogleScopeError(message: string) {
+  return (
+    message.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT") ||
+    message.includes("insufficient authentication scopes") ||
+    message.includes("insufficientPermissions")
+  );
 }

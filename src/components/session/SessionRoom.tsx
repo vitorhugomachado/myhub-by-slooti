@@ -178,7 +178,10 @@ export function SessionRoom({
       });
       const data = await res.json();
 
-      if (res.status === 401 && data.error === "google_not_connected") {
+      if (
+        (res.status === 401 && data.error === "google_not_connected") ||
+        (res.status === 403 && data.error === "google_scope_insufficient")
+      ) {
         window.location.href = `/api/auth/google?returnTo=${encodeURIComponent(
           `/sessao/${appointment.id}`,
         )}`;

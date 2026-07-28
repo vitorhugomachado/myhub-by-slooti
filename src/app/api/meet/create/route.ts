@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
-  createMeetSpace,
+  createMeetLink,
   isGoogleConfigured,
+  isGoogleScopeError,
   refreshAccessToken,
 } from "@/lib/google";
 import { createMockMeetUri, type MeetLinkData } from "@/lib/meet-store";
@@ -20,6 +21,22 @@ function toMeetLink(row: {
     spaceName: row.meetSpaceName || undefined,
     mock: row.meetMock,
   };
+}
+
+function clearGoogleCookies(response: NextResponse) {
+  for (const name of [
+    "google_access_token",
+    "google_id_token",
+    "google_refresh_token",
+  ]) {
+    response.cookies.set(name, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+    });
+  }
 }
 
 export async function POST(request: Request) {
@@ -80,7 +97,13 @@ export async function POST(request: Request) {
       accessToken = refreshed.access_token;
     }
 
-    const space = await createMeetSpace(accessToken!);
+    const space = await createMeetLink(accessToken!, {
+      summary: `Sessão — ${appointment.patient}`,
+      date: appointment.date,
+      start: appointment.start,
+      end: appointment.end,
+    });
+
     const updated = await prisma.appointment.update({
       where: { id: appointment.id },
       data: {
@@ -104,6 +127,20 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Erro ao criar reunião Meet";
+
+    if (isGoogleScopeError(message)) {
+      const response = NextResponse.json(
+        {
+          error: "google_scope_insufficient",
+          message:
+            "Permissões do Google insuficientes. Reconecte o Google e aceite o acesso ao Calendar/Meet.",
+        },
+        { status: 403 },
+      );
+      clearGoogleCookies(response);
+      return response;
+    }
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
