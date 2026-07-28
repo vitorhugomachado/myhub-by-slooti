@@ -189,6 +189,7 @@ export function Header() {
             returnTo={pathname || "/"}
             onClose={() => setSettingsOpen(false)}
             onOpenProfile={openProfile}
+            onGoogleDisconnected={() => setGoogleConnected(false)}
           />
         )}
 
@@ -209,14 +210,17 @@ function SettingsDialog({
   googleConfigured,
   googleConnected,
   returnTo,
+  onGoogleDisconnected,
 }: {
   onClose: () => void;
   onOpenProfile: () => void;
   googleConfigured: boolean;
   googleConnected: boolean;
   returnTo: string;
+  onGoogleDisconnected: () => void;
 }) {
   const [visible, setVisible] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
@@ -230,6 +234,29 @@ function SettingsDialog({
   function handleClose() {
     setVisible(false);
     window.setTimeout(onClose, 200);
+  }
+
+  async function handleDisconnectGoogle() {
+    setDisconnecting(true);
+    try {
+      await fetch("/api/auth/google/disconnect", { method: "POST" });
+      onGoogleDisconnected();
+    } catch {
+      /* ignore */
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  async function handleSwitchGoogle() {
+    setDisconnecting(true);
+    try {
+      await fetch("/api/auth/google/disconnect", { method: "POST" });
+      onGoogleDisconnected();
+      window.location.href = `/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`;
+    } catch {
+      setDisconnecting(false);
+    }
   }
 
   return (
@@ -291,18 +318,38 @@ function SettingsDialog({
 
           {googleConfigured ? (
             googleConnected ? (
-              <div className="flex w-full items-center gap-3 rounded-2xl border border-line bg-bg p-3.5">
-                <span className="flex size-10 items-center justify-center rounded-xl bg-surface text-brand">
-                  <Link2 className="size-4" />
-                </span>
-                <span>
-                  <span className="block text-[13px] font-semibold text-brand">
-                    Google Meet conectado
+              <div className="space-y-2">
+                <div className="flex w-full items-center gap-3 rounded-2xl border border-line bg-bg p-3.5">
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-surface text-brand">
+                    <Link2 className="size-4" />
                   </span>
-                  <span className="block text-[11px] text-muted">
-                    Links reais de reunião estão liberados
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-semibold text-brand">
+                      Google Meet conectado
+                    </span>
+                    <span className="block text-[11px] text-muted">
+                      Links reais de reunião estão liberados
+                    </span>
                   </span>
-                </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDisconnectGoogle()}
+                    disabled={disconnecting}
+                    className="inline-flex items-center justify-center rounded-full border border-line bg-bg px-3 py-2.5 text-[12px] font-semibold text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
+                  >
+                    {disconnecting ? "Aguarde…" : "Desconectar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSwitchGoogle()}
+                    disabled={disconnecting}
+                    className="inline-flex items-center justify-center rounded-full border border-line bg-bg px-3 py-2.5 text-[12px] font-semibold text-brand transition-colors hover:bg-surface-soft disabled:opacity-60"
+                  >
+                    Trocar conta
+                  </button>
+                </div>
               </div>
             ) : (
               <a

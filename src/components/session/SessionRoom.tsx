@@ -426,6 +426,37 @@ export function SessionRoom({
                 </div>
               )}
 
+              {status?.connected && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-line bg-bg p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[13px] font-semibold text-brand">
+                      Google Meet conectado
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-muted">
+                      Desconecte para trocar de conta Google.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void (async () => {
+                        await fetch("/api/auth/google/disconnect", {
+                          method: "POST",
+                        });
+                        setStatus((prev) =>
+                          prev
+                            ? { ...prev, connected: false }
+                            : { configured: true, connected: false },
+                        );
+                      })();
+                    }}
+                    className="inline-flex shrink-0 items-center justify-center rounded-full border border-line bg-card px-4 py-2.5 text-[13px] font-semibold text-danger hover:bg-danger/10"
+                  >
+                    Desconectar
+                  </button>
+                </div>
+              )}
+
               {status?.connected ? (
                 !meet ? (
                   <button
