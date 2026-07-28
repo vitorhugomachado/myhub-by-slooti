@@ -28,13 +28,20 @@ async function persistSchedule(items: DatedAppointment[]) {
     credentials: "include",
     body: JSON.stringify({ items }),
   });
+  const data = (await res.json().catch(() => null)) as {
+    error?: string;
+    items?: DatedAppointment[];
+  } | null;
   if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as {
-      error?: string;
-    } | null;
     throw new Error(data?.error || "Falha ao salvar a agenda.");
   }
+  if (Array.isArray(data?.items)) {
+    saveSchedule(data.items, { silent: true });
+    window.dispatchEvent(new Event(SCHEDULE_EVENT));
+    return data.items;
+  }
   window.dispatchEvent(new Event(SCHEDULE_EVENT));
+  return items;
 }
 
 export function useSchedule() {
@@ -65,7 +72,9 @@ export function useSchedule() {
   const cancel = useCallback((id: number) => {
     setItems((prev) => {
       const next = cancelAppointment(prev, id);
-      void persistSchedule(next);
+      void persistSchedule(next)
+        .then((saved) => setItems(saved))
+        .catch(() => setItems(prev));
       return next;
     });
   }, []);
@@ -73,7 +82,9 @@ export function useSchedule() {
   const complete = useCallback((id: number) => {
     setItems((prev) => {
       const next = completeAppointment(prev, id);
-      void persistSchedule(next);
+      void persistSchedule(next)
+        .then((saved) => setItems(saved))
+        .catch(() => setItems(prev));
       return next;
     });
   }, []);
@@ -82,7 +93,9 @@ export function useSchedule() {
     (id: number, patch: { date: string; start: string; end?: string }) => {
       setItems((prev) => {
         const next = rescheduleAppointment(prev, id, patch);
-        void persistSchedule(next);
+        void persistSchedule(next)
+          .then((saved) => setItems(saved))
+          .catch(() => setItems(prev));
         return next;
       });
     },
@@ -98,17 +111,18 @@ export function useSchedule() {
       return next;
     });
     try {
-      await persistSchedule(next);
+      const saved = await persistSchedule(next);
+      setItems(saved);
+      return saved.find(
+        (a) =>
+          a.date === input.date &&
+          a.start === input.start &&
+          a.patient === input.patient,
+      );
     } catch (error) {
       setItems(previous);
       throw error;
     }
-    return next.find(
-      (a) =>
-        a.date === input.date &&
-        a.start === input.start &&
-        a.patient === input.patient,
-    );
   }, []);
 
   const active = useMemo(() => activeAppointments(items), [items]);
