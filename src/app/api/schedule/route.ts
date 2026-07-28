@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { toAppointment } from "@/lib/mappers";
-import { addMinutesToTime, SESSION_MINUTES, type ScheduleItem } from "@/lib/schedule";
+import {
+  addMinutesToTime,
+  SESSION_MINUTES,
+  type ScheduleItem,
+} from "@/lib/schedule";
 import { getSessionUser } from "@/lib/session";
 
 type ScheduleWriteItem = ScheduleItem & {
@@ -10,16 +14,20 @@ type ScheduleWriteItem = ScheduleItem & {
   meetMock?: boolean;
 };
 
-/** Sequência fica atrás quando IDs foram inseridos manualmente — realinha antes de create. */
-async function syncAppointmentIdSequence() {
-  await prisma.$executeRawUnsafe(
-    `SELECT setval(
-      pg_get_serial_sequence('"Appointment"', 'id'),
-      GREATEST(COALESCE((SELECT MAX(id) FROM "Appointment"), 1), 1),
-      true
-    )`,
-  );
-}
+type AppointmentFields = {
+  date: string;
+  start: string;
+  end: string;
+  patient: string;
+  patientId: string | null;
+  type: string;
+  mode: string;
+  status: string;
+  avatar: string;
+  meetUri: string;
+  meetSpaceName: string;
+  meetMock: boolean;
+};
 
 function appointmentFields(a: {
   date: string;
@@ -34,7 +42,7 @@ function appointmentFields(a: {
   meetUri?: string;
   meetSpaceName?: string;
   meetMock?: boolean;
-}) {
+}): AppointmentFields {
   return {
     date: a.date,
     start: a.start,
@@ -49,6 +57,35 @@ function appointmentFields(a: {
     meetSpaceName: a.meetSpaceName ?? "",
     meetMock: a.meetMock ?? false,
   };
+}
+
+/**
+ * Cria Appointment com id = MAX+1 (evita serial do Postgres desatualizado).
+ * Lock evita corrida entre inserts simultâneos.
+ */
+async function createAppointmentRow(userId: string, fields: AppointmentFields) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(87236401)");
+    const rows = await tx.$queryRawUnsafe<Array<{ max: number | null }>>(
+      `SELECT COALESCE(MAX(id), 0)::int AS max FROM "Appointment"`,
+    );
+    const nextId = (rows[0]?.max ?? 0) + 1;
+    const row = await tx.appointment.create({
+      data: {
+        id: nextId,
+        userId,
+        ...fields,
+      },
+    });
+    await tx.$executeRawUnsafe(
+      `SELECT setval(
+        pg_get_serial_sequence('"Appointment"', 'id'),
+        GREATEST(COALESCE((SELECT MAX(id) FROM "Appointment"), 1), 1),
+        true
+      )`,
+    );
+    return row;
+  });
 }
 
 async function assertPatientOwned(
@@ -77,7 +114,6 @@ export async function GET() {
   return NextResponse.json({ items: rows.map(toAppointment) });
 }
 
-/** Cria uma sessão (ID gerado pelo banco). */
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) {
@@ -128,24 +164,20 @@ export async function POST(request: Request) {
       );
     }
 
-    await syncAppointmentIdSequence();
-
-    const row = await prisma.appointment.create({
-      data: {
-        userId: user.id,
-        ...appointmentFields({
-          date: body.date,
-          start: body.start,
-          end,
-          patient: body.patient.trim(),
-          patientId: body.patientId,
-          type: body.type?.trim() || "Sessão",
-          mode: body.mode || "Online",
-          status: "upcoming",
-          avatar: body.avatar || "",
-        }),
-      },
-    });
+    const row = await createAppointmentRow(
+      user.id,
+      appointmentFields({
+        date: body.date,
+        start: body.start,
+        end,
+        patient: body.patient.trim(),
+        patientId: body.patientId,
+        type: body.type?.trim() || "Sessão",
+        mode: body.mode || "Online",
+        status: "upcoming",
+        avatar: body.avatar || "",
+      }),
+    );
 
     return NextResponse.json({ item: toAppointment(row) });
   } catch (error) {
@@ -203,12 +235,9 @@ export async function PUT(request: Request) {
       .map((a) => a.id)
       .filter((id) => Number.isFinite(id) && id > 0 && ownedById.has(id));
 
-    const toCreate = items.filter((a) => !ownedById.has(a.id) || a.id <= 0);
-    if (toCreate.length) {
-      await syncAppointmentIdSequence();
-    }
-
     await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(87236401)");
+
       await tx.appointment.deleteMany({
         where: {
           userId: user.id,
@@ -239,14 +268,27 @@ export async function PUT(request: Request) {
             data,
           });
         } else {
+          const rows = await tx.$queryRawUnsafe<Array<{ max: number | null }>>(
+            `SELECT COALESCE(MAX(id), 0)::int AS max FROM "Appointment"`,
+          );
+          const nextId = (rows[0]?.max ?? 0) + 1;
           await tx.appointment.create({
             data: {
+              id: nextId,
               userId: user.id,
               ...data,
             },
           });
         }
       }
+
+      await tx.$executeRawUnsafe(
+        `SELECT setval(
+          pg_get_serial_sequence('"Appointment"', 'id'),
+          GREATEST(COALESCE((SELECT MAX(id) FROM "Appointment"), 1), 1),
+          true
+        )`,
+      );
     });
 
     const rows = await prisma.appointment.findMany({
