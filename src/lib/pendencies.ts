@@ -1,3 +1,5 @@
+import { readUserStorage, writeUserStorage } from "@/lib/user-storage";
+
 export type PendencyType = "prontuario" | "receita";
 
 export type Pendency = {
@@ -22,7 +24,7 @@ export function pendencyLabel(type: PendencyType) {
 export function loadPendencies(): Pendency[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(PENDENCIES_KEY);
+    const raw = readUserStorage(PENDENCIES_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Pendency[];
     return Array.isArray(parsed) ? parsed : [];
@@ -31,9 +33,14 @@ export function loadPendencies(): Pendency[] {
   }
 }
 
-export function savePendencies(items: Pendency[]) {
-  localStorage.setItem(PENDENCIES_KEY, JSON.stringify(items));
-  window.dispatchEvent(new Event(PENDENCIES_EVENT));
+export function savePendencies(
+  items: Pendency[],
+  opts?: { silent?: boolean },
+) {
+  writeUserStorage(PENDENCIES_KEY, JSON.stringify(items));
+  if (!opts?.silent) {
+    window.dispatchEvent(new Event(PENDENCIES_EVENT));
+  }
 }
 
 export function addPendency(

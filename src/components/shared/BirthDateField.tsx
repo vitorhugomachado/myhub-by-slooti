@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   daysInMonth,
   parseIsoDate,
@@ -36,7 +36,11 @@ type Props = {
   minYear?: number;
 };
 
-/** Seletor dia / mês / ano (pt-BR) → ISO `YYYY-MM-DD`. */
+/**
+ * Seletor dia / mês / ano (pt-BR) → ISO `YYYY-MM-DD`.
+ * Mantém estado parcial local para o valor não resetar ao escolher
+ * só um dos campos (bug anterior: toIsoDate("") limpava os selects).
+ */
 export function BirthDateField({
   value,
   onChange,
@@ -44,7 +48,19 @@ export function BirthDateField({
   maxYear = new Date().getFullYear(),
   minYear = 1920,
 }: Props) {
-  const { year, month, day } = parseIsoDate(value);
+  const parsed = parseIsoDate(value);
+  const [year, setYear] = useState(parsed.year);
+  const [month, setMonth] = useState(parsed.month);
+  const [day, setDay] = useState(parsed.day);
+
+  useEffect(() => {
+    // Só sincroniza ISO completo do pai; não apaga seleção parcial local
+    if (!value) return;
+    const next = parseIsoDate(value);
+    setYear(next.year);
+    setMonth(next.month);
+    setDay(next.day);
+  }, [value]);
 
   const years = useMemo(() => {
     const list: number[] = [];
@@ -69,7 +85,23 @@ export function BirthDateField({
         dayValue = String(max).padStart(2, "0");
       }
     }
-    onChange(toIsoDate(nextYear, nextMonth, dayValue));
+
+    setYear(nextYear);
+    setMonth(nextMonth);
+    setDay(dayValue);
+
+    if (!nextYear && !nextMonth && !dayValue) {
+      onChange("");
+      return;
+    }
+
+    if (nextYear && nextMonth && dayValue) {
+      onChange(toIsoDate(nextYear, nextMonth, dayValue));
+      return;
+    }
+
+    // Parcial: limpa o ISO no form até completar os 3 campos
+    if (value) onChange("");
   }
 
   const cls = error ? selectErrorClass : selectClass;

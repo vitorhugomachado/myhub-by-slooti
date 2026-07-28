@@ -5,11 +5,11 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BirthDateField } from "@/components/shared/BirthDateField";
 import { useCepAutofill } from "@/hooks/useCepAutofill";
+import { DEFAULT_AVATAR, fileToAvatarDataUrl, isDefaultAvatar, resolveAvatar } from "@/lib/avatar";
 import {
   APPROACHES,
   BRAZIL_UFS,
   SPECIALTIES,
-  defaultProfile,
   formatCnpj,
   formatCpf,
   formatPhone,
@@ -26,43 +26,7 @@ const inputClass =
 const inputErrorClass =
   "w-full rounded-xl border border-danger/50 bg-bg px-3.5 py-3 text-[13px] leading-normal text-brand outline-none placeholder:text-muted focus:border-danger";
 
-const MAX_AVATAR_BYTES = 900_000;
-
 type Section = "dados" | "profissional" | "fiscal" | "endereco";
-
-async function fileToAvatarDataUrl(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Selecione uma imagem (JPG, PNG ou WEBP).");
-  }
-  if (file.size > 8 * 1024 * 1024) {
-    throw new Error("A imagem deve ter no máximo 8 MB.");
-  }
-
-  const bitmap = await createImageBitmap(file);
-  const maxSide = 512;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Não foi possível processar a imagem.");
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  let quality = 0.88;
-  let dataUrl = canvas.toDataURL("image/jpeg", quality);
-  while (dataUrl.length > MAX_AVATAR_BYTES && quality > 0.45) {
-    quality -= 0.1;
-    dataUrl = canvas.toDataURL("image/jpeg", quality);
-  }
-  if (dataUrl.length > MAX_AVATAR_BYTES) {
-    throw new Error("Não foi possível reduzir a imagem. Tente outra foto.");
-  }
-  return dataUrl;
-}
 
 export function PsychologistProfileForm({
   initial,
@@ -97,10 +61,13 @@ export function PsychologistProfileForm({
   }, [initial]);
 
   const validation = useMemo(() => validateProfile(form), [form]);
-  const defaultAvatar = defaultProfile().avatar;
-  const canResetAvatar = form.avatar !== defaultAvatar;
+  const defaultAvatar = DEFAULT_AVATAR;
+  const canResetAvatar = !isDefaultAvatar(form.avatar);
+  const avatarSrc = resolveAvatar(form.avatar);
   const avatarUnoptimized =
-    form.avatar.startsWith("data:") || form.avatar.startsWith("blob:");
+    form.avatar.startsWith("data:") ||
+    form.avatar.startsWith("blob:") ||
+    avatarSrc.endsWith(".svg");
 
   const cep = useCepAutofill(form.zip, (address) => {
     setForm((prev) => ({
@@ -241,28 +208,30 @@ export function PsychologistProfileForm({
           </button>
         </div>
 
-        <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-line px-4 py-3">
-          {(
-            [
-              { id: "dados" as const, label: "Dados" },
-              { id: "profissional" as const, label: "Profissional" },
-              { id: "fiscal" as const, label: "Fiscal" },
-              { id: "endereco" as const, label: "Consultório" },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setSection(tab.id)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors ${
-                section === tab.id
-                  ? "bg-surface text-brand"
-                  : "bg-bg text-muted hover:text-brand"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex shrink-0 overflow-x-auto border-b border-line px-4 py-3">
+          <div className="inline-flex rounded-full border border-line bg-bg p-1">
+            {(
+              [
+                { id: "dados" as const, label: "Dados" },
+                { id: "profissional" as const, label: "Profissional" },
+                { id: "fiscal" as const, label: "Fiscal" },
+                { id: "endereco" as const, label: "Consultório" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSection(tab.id)}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  section === tab.id
+                    ? "bg-surface text-brand shadow-[0_1px_2px_rgba(20,22,26,0.06)]"
+                    : "text-muted hover:text-brand"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -284,7 +253,7 @@ export function PsychologistProfileForm({
               <div className="sm:col-span-2 flex flex-col gap-3 rounded-2xl border border-line bg-bg p-3 sm:flex-row sm:items-center">
                 <div className="relative mx-auto shrink-0 sm:mx-0">
                   <Image
-                    src={form.avatar}
+                    src={avatarSrc}
                     alt={form.fullName || "Avatar"}
                     width={72}
                     height={72}

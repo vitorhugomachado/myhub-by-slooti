@@ -44,9 +44,11 @@ export function useProfile() {
       }
     }
     void sync();
-    window.addEventListener(PROFILE_EVENT, () => void sync());
+    const onEvent = () => void sync();
+    window.addEventListener(PROFILE_EVENT, onEvent);
     return () => {
       cancelled = true;
+      window.removeEventListener(PROFILE_EVENT, onEvent);
     };
   }, []);
 

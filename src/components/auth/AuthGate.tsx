@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AUTH_EVENT, fetchSessionUser, getCachedUser } from "@/lib/auth";
-import { hasFinanceAccess, needsPlanOnboarding, postAuthPath } from "@/lib/plans";
+import { needsPlanOnboarding, postAuthPath } from "@/lib/plans";
 
 const PUBLIC_PREFIXES = ["/login", "/auth"];
 
@@ -66,16 +66,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
       if (user && onboarding) {
         setReady(true);
-        return;
-      }
-
-      if (
-        user &&
-        !hasFinanceAccess(user.plan) &&
-        (pathname === "/financeiro" || pathname.startsWith("/financeiro/"))
-      ) {
-        setReady(false);
-        router.replace("/?upgrade=financeiro");
         return;
       }
 

@@ -15,11 +15,11 @@ import { QuickPatientCard } from "@/components/dashboard/QuickPatientCard";
 import { RescheduleDialog } from "@/components/sessoes/SessionManageDialogs";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
-import { useAgendaClock } from "@/hooks/useAgendaClock";
+import { useAgendaClock, useAgendaToday } from "@/hooks/useAgendaClock";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
 import { needsPackageRenewal } from "@/lib/billing";
-import { AGENDA_TODAY } from "@/lib/agenda";
+import { resolveDashboardAgendaFocus } from "@/lib/agenda";
 import { formatDelay, resolveLateQueue } from "@/lib/session-timing";
 import {
   loadSessionPhase,
@@ -29,23 +29,29 @@ import {
 
 export function NowCard() {
   const { paid, patientByName } = useFinance();
-  const { forDate, reschedule, complete } = useSchedule();
+  const { items, forDate, reschedule, complete } = useSchedule();
+  const today = useAgendaToday();
   const now = useAgendaClock();
-  const todayItems = forDate(AGENDA_TODAY, false);
+
+  const focus = useMemo(
+    () => resolveDashboardAgendaFocus(items, today),
+    [items, today],
+  );
+  const dayItems = forDate(focus.date, false);
 
   const lateInfo = useMemo(
-    () => resolveLateQueue(todayItems, now),
-    [todayItems, now],
+    () => (focus.isToday ? resolveLateQueue(dayItems, now) : null),
+    [dayItems, now, focus.isToday],
   );
 
   const current = useMemo(() => {
     if (lateInfo) return lateInfo.late;
     return (
-      todayItems.find((a) => a.status === "now") ??
-      todayItems.find((a) => a.status === "upcoming") ??
+      dayItems.find((a) => a.status === "now") ??
+      dayItems.find((a) => a.status === "upcoming") ??
       null
     );
-  }, [todayItems, lateInfo]);
+  }, [dayItems, lateInfo]);
 
   const [phase, setPhase] = useState<SessionPhase>("idle");
   const [finishOpen, setFinishOpen] = useState(false);
@@ -143,7 +149,7 @@ export function NowCard() {
                 <span className="live-dot text-brand" aria-hidden />
                 Sessão em andamento
               </>
-            ) : current.status === "now" ? (
+            ) : current.status === "now" && focus.isToday ? (
               <>
                 <span className="live-dot text-brand" aria-hidden />
                 Acontecendo agora
@@ -151,11 +157,14 @@ export function NowCard() {
             ) : (
               <>
                 <CalendarClock className="size-3.5" />
-                Próximo atendimento
+                {focus.isToday
+                  ? "Próximo atendimento"
+                  : `Próximo · ${focus.shortLabel}`}
               </>
             )}
           </span>
           <span className="text-[13px] font-medium text-muted">
+            {focus.isToday ? "" : `${focus.shortLabel} · `}
             {current.start} – {current.end}
           </span>
           {isLate && lateInfo && (

@@ -1,5 +1,7 @@
+import { DEFAULT_AVATAR, resolveAvatar } from "@/lib/avatar";
 import { isValidBirthDate } from "@/lib/dates";
 import { currentUser } from "@/lib/mock-data";
+import { readUserStorage, writeUserStorage } from "@/lib/user-storage";
 
 export const PROFILE_KEY = "myhub_profile_v1";
 export const PROFILE_EVENT = "myhub:profile";
@@ -101,7 +103,7 @@ export function defaultProfile(): PsychologistProfile {
     whatsapp: "",
     birthDate: "",
     cpf: "",
-    avatar: currentUser.avatar,
+    avatar: DEFAULT_AVATAR,
     title: "Psicóloga",
     crpNumber: "",
     crpUf: "SP",
@@ -127,17 +129,17 @@ export function defaultProfile(): PsychologistProfile {
 export function loadProfile(): PsychologistProfile {
   if (typeof window === "undefined") return defaultProfile();
   try {
-    const raw = localStorage.getItem(PROFILE_KEY);
+    const raw = readUserStorage(PROFILE_KEY);
     if (!raw) return defaultProfile();
     const parsed = JSON.parse(raw) as Partial<PsychologistProfile>;
-    return { ...defaultProfile(), ...parsed };
+    return { ...defaultProfile(), ...parsed, avatar: resolveAvatar(parsed.avatar) };
   } catch {
     return defaultProfile();
   }
 }
 
 export function saveProfile(profile: PsychologistProfile) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  writeUserStorage(PROFILE_KEY, JSON.stringify(profile));
   window.dispatchEvent(new Event(PROFILE_EVENT));
 }
 

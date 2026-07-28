@@ -1,3 +1,5 @@
+import { readUserStorage, writeUserStorage } from "@/lib/user-storage";
+
 export type MeetLinkData = {
   meetingUri: string;
   spaceName?: string;
@@ -11,7 +13,7 @@ const memory = new Map<number, MeetLinkData>();
 function readLocal(): Record<string, MeetLinkData> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(MEET_STORE_KEY);
+    const raw = readUserStorage(MEET_STORE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, MeetLinkData>;
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -24,7 +26,7 @@ function writeLocal(appointmentId: number, data: MeetLinkData) {
   if (typeof window === "undefined") return;
   const map = readLocal();
   map[String(appointmentId)] = data;
-  localStorage.setItem(MEET_STORE_KEY, JSON.stringify(map));
+  writeUserStorage(MEET_STORE_KEY, JSON.stringify(map));
 }
 
 export function getStoredMeetLink(appointmentId: number) {

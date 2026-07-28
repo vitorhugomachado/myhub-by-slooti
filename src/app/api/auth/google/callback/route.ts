@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   exchangeCodeForTokens,
-  getGoogleUserInfo,
   isGoogleConfigured,
 } from "@/lib/google";
 
@@ -34,24 +33,9 @@ export async function GET(request: Request) {
 
   try {
     const tokens = await exchangeCodeForTokens(code);
-    let userEmail = "";
-    let userName = "";
-    let userPicture = "";
-
-    try {
-      const profile = await getGoogleUserInfo(tokens.access_token);
-      userEmail = profile.email;
-      userName = profile.name;
-      userPicture = profile.picture ?? "";
-    } catch {
-      /* perfil opcional — tokens ainda são salvos para Meet */
-    }
 
     const target = new URL(returnTo, request.url);
     if (returnTo.startsWith("/auth/callback") || returnTo.startsWith("/login")) {
-      if (userEmail) target.searchParams.set("email", userEmail);
-      if (userName) target.searchParams.set("name", userName);
-      if (userPicture) target.searchParams.set("picture", userPicture);
       target.searchParams.set("google", "ok");
     }
 
@@ -64,6 +48,16 @@ export async function GET(request: Request) {
       path: "/",
       maxAge: tokens.expires_in ?? 3600,
     });
+
+    if (tokens.id_token) {
+      response.cookies.set("google_id_token", tokens.id_token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: tokens.expires_in ?? 3600,
+      });
+    }
 
     if (tokens.refresh_token) {
       response.cookies.set("google_refresh_token", tokens.refresh_token, {

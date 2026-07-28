@@ -1,11 +1,19 @@
 "use client";
 
-import { X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Camera, Trash2, X } from "lucide-react";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BirthDateField } from "@/components/shared/BirthDateField";
 import { useCepAutofill } from "@/hooks/useCepAutofill";
 import { usePendencies } from "@/hooks/usePendencies";
 import { formatZip } from "@/lib/address";
+import {
+  DEFAULT_AVATAR,
+  fileToAvatarDataUrl,
+  isDefaultAvatar,
+  resolveAvatar,
+} from "@/lib/avatar";
+import { isMinorBirthDate, isValidBirthDate } from "@/lib/dates";
 import { validatePatient } from "@/lib/patient-validation";
 import { pendencyLabel } from "@/lib/pendencies";
 import {
@@ -18,7 +26,11 @@ import {
 } from "@/lib/patients";
 import { BRAZIL_UFS, formatCpf, formatPhone } from "@/lib/profile";
 
-type FormState = ReturnType<typeof emptyPatient>;
+type FormState = ReturnType<typeof emptyPatient> & { avatar: string };
+
+function emptyPatientForm(): FormState {
+  return { ...emptyPatient(), avatar: DEFAULT_AVATAR };
+}
 
 const genders = ["Feminino", "Masculino", "Não-binário", "Prefiro não informar", "Outro"];
 const marital = ["Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Viúvo(a)"];
@@ -38,34 +50,54 @@ export function PatientForm({
   initial,
   onClose,
   onSave,
+  lockScroll = true,
+  overlayClassName = "z-50",
+  title,
+  subtitle,
 }: {
   initial?: Patient | null;
   onClose: () => void;
   onSave: (data: FormState, id?: string) => void | Promise<void>;
+  /** Quando false, não altera overflow do body (útil se outro modal já trava o scroll). */
+  lockScroll?: boolean;
+  overlayClassName?: string;
+  title?: string;
+  subtitle?: string;
 }) {
-  const [form, setForm] = useState<FormState>(emptyPatient());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState<FormState>(emptyPatientForm);
   const [visible, setVisible] = useState(false);
   const [section, setSection] = useState<"dados" | "clinico" | "atendimento">("dados");
   const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
   useEffect(() => {
     if (initial) {
-      const { id: _id, createdAt: _c, avatar: _a, ...rest } = initial;
-      setForm(rest);
+      const { id: _id, createdAt: _c, ...rest } = initial;
+      setForm({
+        ...rest,
+        avatar: resolveAvatar(initial.avatar),
+      });
     } else {
-      setForm(emptyPatient());
+      setForm(emptyPatientForm());
     }
     setTried(false);
     setSaveError("");
+    setAvatarError("");
     const frame = requestAnimationFrame(() => setVisible(true));
-    document.body.style.overflow = "hidden";
+    if (lockScroll) {
+      document.body.style.overflow = "hidden";
+    }
     return () => {
       cancelAnimationFrame(frame);
-      document.body.style.overflow = "";
+      if (lockScroll) {
+        document.body.style.overflow = "";
+      }
     };
-  }, [initial]);
+  }, [initial, lockScroll]);
 
   const cep = useCepAutofill(form.zip, (address) => {
     setForm((prev) => ({
@@ -78,13 +110,95 @@ export function PatientForm({
     }));
   });
 
-  const validation = useMemo(() => validatePatient(form), [form]);
+  const validation = useMemo(() => {
+    const { avatar: _a, ...rest } = form;
+    return validatePatient(rest);
+  }, [form]);
+
+  const canResetAvatar = !isDefaultAvatar(form.avatar);
+  const avatarSrc = resolveAvatar(form.avatar);
+  const avatarUnoptimized =
+    form.avatar.startsWith("data:") ||
+    form.avatar.startsWith("blob:") ||
+    avatarSrc.endsWith(".svg");
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function err(key: keyof FormState) {
+  async function onAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setAvatarBusy(true);
+    setAvatarError("");
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      set("avatar", dataUrl);
+    } catch (err) {
+      setAvatarError(
+        err instanceof Error ? err.message : "Falha ao carregar a foto.",
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  function resetAvatar() {
+    setAvatarError("");
+    set("avatar", DEFAULT_AVATAR);
+  }
+
+  function parseMoney(value: string) {
+    const normalized = value.trim().replace(",", ".");
+    if (!normalized) return null;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /** Valor da sessão = preço do pacote ÷ sessões. */
+  function sessionFromPackage(packagePrice: string, packageSize: string) {
+    const price = parseMoney(packagePrice);
+    const size = Number(packageSize.trim());
+    if (price == null || price < 0 || !Number.isFinite(size) || size < 1) {
+      return null;
+    }
+    const perSession = price / size;
+    return (Math.round(perSession * 100) / 100).toString();
+  }
+
+  function setPackageField(
+    key: "packagePrice" | "packageSize",
+    value: string,
+  ) {
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      const derived = sessionFromPackage(
+        key === "packagePrice" ? value : next.packagePrice,
+        key === "packageSize" ? value : next.packageSize,
+      );
+      if (derived != null) {
+        next.sessionValue = derived;
+      }
+      if (key === "packageSize" && /^\d+$/.test(value.trim())) {
+        next.creditsLeft = value.trim();
+      }
+      return next;
+    });
+  }
+
+  function setBirthDate(iso: string) {
+    setForm((prev) => {
+      const next = { ...prev, birthDate: iso };
+      if (iso && isValidBirthDate(iso)) {
+        next.isMinor = isMinorBirthDate(iso);
+      }
+      return next;
+    });
+  }
+
+  function err(key: Exclude<keyof FormState, "avatar">) {
     return tried ? validation.errors[key] : undefined;
   }
 
@@ -103,14 +217,25 @@ export function PatientForm({
         result.errors.fullName ||
         result.errors.email ||
         result.errors.phone ||
+        result.errors.whatsapp ||
         result.errors.cpf ||
         result.errors.birthDate ||
         result.errors.zip ||
+        result.errors.state ||
+        result.errors.emergencyPhone ||
         result.errors.guardianName ||
-        result.errors.guardianCpf
+        result.errors.guardianCpf ||
+        result.errors.guardianPhone
       ) {
         setSection("dados");
-      } else if (result.errors.lgpdConsent) {
+      } else if (
+        result.errors.lgpdConsent ||
+        result.errors.startedAt ||
+        result.errors.sessionValue ||
+        result.errors.packageSize ||
+        result.errors.packagePrice ||
+        result.errors.creditsLeft
+      ) {
         setSection("atendimento");
       }
       return;
@@ -132,7 +257,9 @@ export function PatientForm({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
+    <div
+      className={`fixed inset-0 flex items-end justify-center p-0 sm:items-center sm:p-6 ${overlayClassName}`}
+    >
       <button
         type="button"
         aria-label="Fechar"
@@ -153,10 +280,13 @@ export function PatientForm({
         <div className="shrink-0 flex items-start justify-between gap-3 px-5 pt-5 pb-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold tracking-tight text-brand">
-              {initial ? "Editar paciente" : "Novo paciente"}
+              {title ?? (initial ? "Editar paciente" : "Novo paciente")}
             </h2>
-            <p className="mt-1 text-[13px] leading-snug text-muted">
-              Cadastro completo para atendimento clínico
+            <p className="mt-0.5 text-[13px] leading-snug text-muted">
+              {subtitle ??
+                (initial
+                  ? "Atualize os dados da ficha"
+                  : "Cadastro completo para atendimento clínico")}
             </p>
           </div>
           <button
@@ -196,6 +326,68 @@ export function PatientForm({
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto border-t border-line px-5 py-5">
           {section === "dados" && (
             <>
+              <div className="flex flex-col gap-3 rounded-2xl border border-line bg-bg p-3 sm:flex-row sm:items-center">
+                <div className="relative mx-auto shrink-0 sm:mx-0">
+                  <Image
+                    src={avatarSrc}
+                    alt={form.fullName || "Foto do paciente"}
+                    width={72}
+                    height={72}
+                    unoptimized={avatarUnoptimized}
+                    className="size-[72px] rounded-full bg-[#E5E7EB] object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={avatarBusy}
+                    aria-label="Trocar foto"
+                    className="absolute -right-1 -bottom-1 flex size-8 items-center justify-center rounded-full border border-line bg-card text-brand shadow-sm transition-colors hover:bg-surface disabled:opacity-50"
+                  >
+                    <Camera className="size-3.5" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => void onAvatarChange(e)}
+                  />
+                </div>
+                <div className="min-w-0 flex-1 text-center sm:text-left">
+                  <p className="truncate text-[14px] font-semibold text-brand">
+                    {form.fullName || "Foto do paciente"}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-muted">
+                    JPG, PNG ou WEBP · até 8 MB
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={avatarBusy}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-surface-soft disabled:opacity-50"
+                    >
+                      <Camera className="size-3.5" />
+                      {avatarBusy ? "Carregando…" : "Adicionar foto"}
+                    </button>
+                    {canResetAvatar ? (
+                      <button
+                        type="button"
+                        onClick={resetAvatar}
+                        disabled={avatarBusy}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-[12px] font-semibold text-muted transition-colors hover:text-danger disabled:opacity-50"
+                      >
+                        <Trash2 className="size-3.5" />
+                        Remover
+                      </button>
+                    ) : null}
+                  </div>
+                  {avatarError ? (
+                    <p className="mt-1.5 text-[11px] text-danger">{avatarError}</p>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Nome completo *" error={err("fullName")} className="sm:col-span-2">
                   <input
@@ -216,8 +408,9 @@ export function PatientForm({
                 </Field>
                 <Field label="Data de nascimento" error={err("birthDate")}>
                   <BirthDateField
+                    key={initial?.id ?? "new-patient"}
                     value={form.birthDate}
-                    onChange={(iso) => set("birthDate", iso)}
+                    onChange={setBirthDate}
                     error={Boolean(err("birthDate"))}
                   />
                 </Field>
@@ -286,9 +479,9 @@ export function PatientForm({
                     inputMode="tel"
                   />
                 </Field>
-                <Field label="WhatsApp" className="sm:col-span-2">
+                <Field label="WhatsApp" error={err("whatsapp")} className="sm:col-span-2">
                   <input
-                    className={inputClass}
+                    className={err("whatsapp") ? inputErrorClass : inputClass}
                     value={form.whatsapp}
                     onChange={(e) => set("whatsapp", formatPhone(e.target.value))}
                     placeholder="(11) 90000-0000"
@@ -377,9 +570,11 @@ export function PatientForm({
                     onChange={(e) => set("emergencyName", e.target.value)}
                   />
                 </Field>
-                <Field label="Telefone">
+                <Field label="Telefone" error={err("emergencyPhone")}>
                   <input
-                    className={inputClass}
+                    className={
+                      err("emergencyPhone") ? inputErrorClass : inputClass
+                    }
                     value={form.emergencyPhone}
                     onChange={(e) =>
                       set("emergencyPhone", formatPhone(e.target.value))
@@ -405,6 +600,14 @@ export function PatientForm({
                 />
                 Paciente menor de idade (preencher responsável)
               </label>
+              {form.birthDate &&
+              isValidBirthDate(form.birthDate) &&
+              isMinorBirthDate(form.birthDate) ? (
+                <p className="text-[11px] text-muted">
+                  Data de nascimento indica menor de 18 anos — responsável é
+                  obrigatório.
+                </p>
+              ) : null}
 
               {form.isMinor && (
                 <div className="grid gap-3 rounded-2xl border border-line bg-bg p-3 sm:grid-cols-3">
@@ -429,9 +632,11 @@ export function PatientForm({
                       inputMode="numeric"
                     />
                   </Field>
-                  <Field label="Telefone do responsável">
+                  <Field label="Telefone do responsável" error={err("guardianPhone")}>
                     <input
-                      className={inputClass}
+                      className={
+                        err("guardianPhone") ? inputErrorClass : inputClass
+                      }
                       value={form.guardianPhone}
                       onChange={(e) =>
                         set("guardianPhone", formatPhone(e.target.value))
@@ -532,10 +737,10 @@ export function PatientForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Início do acompanhamento">
+              <Field label="Início do acompanhamento" error={err("startedAt")}>
                 <input
                   type="date"
-                  className={inputClass}
+                  className={err("startedAt") ? inputErrorClass : inputClass}
                   value={form.startedAt}
                   onChange={(e) => set("startedAt", e.target.value)}
                 />
@@ -577,7 +782,22 @@ export function PatientForm({
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => set("billingMode", opt.id as BillingMode)}
+                      onClick={() => {
+                        setForm((prev) => {
+                          const next = {
+                            ...prev,
+                            billingMode: opt.id as BillingMode,
+                          };
+                          if (opt.id === "pacote") {
+                            const derived = sessionFromPackage(
+                              next.packagePrice,
+                              next.packageSize,
+                            );
+                            if (derived != null) next.sessionValue = derived;
+                          }
+                          return next;
+                        });
+                      }}
                       className={`flex-1 rounded-full px-3 py-2 text-[12px] font-semibold transition-colors ${
                         form.billingMode === opt.id
                           ? "bg-surface text-brand"
@@ -610,39 +830,55 @@ export function PatientForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Valor da sessão (R$)">
+              <Field label="Valor da sessão (R$)" error={err("sessionValue")}>
                 <input
-                  className={inputClass}
+                  className={err("sessionValue") ? inputErrorClass : inputClass}
                   value={form.sessionValue}
                   onChange={(e) => set("sessionValue", e.target.value)}
                   placeholder="180"
                   inputMode="decimal"
+                  readOnly={form.billingMode === "pacote"}
                 />
+                {form.billingMode === "pacote" ? (
+                  <span className="mt-1 block text-[11px] text-muted">
+                    Calculado automaticamente: preço do pacote ÷ sessões.
+                  </span>
+                ) : null}
               </Field>
 
               {form.billingMode === "pacote" && (
                 <>
-                  <Field label="Sessões no pacote">
+                  <Field label="Sessões no pacote" error={err("packageSize")}>
                     <input
-                      className={inputClass}
+                      className={
+                        err("packageSize") ? inputErrorClass : inputClass
+                      }
                       value={form.packageSize}
-                      onChange={(e) => set("packageSize", e.target.value)}
+                      onChange={(e) =>
+                        setPackageField("packageSize", e.target.value)
+                      }
                       placeholder="4"
                       inputMode="numeric"
                     />
                   </Field>
-                  <Field label="Preço do pacote (R$)">
+                  <Field label="Preço do pacote (R$)" error={err("packagePrice")}>
                     <input
-                      className={inputClass}
+                      className={
+                        err("packagePrice") ? inputErrorClass : inputClass
+                      }
                       value={form.packagePrice}
-                      onChange={(e) => set("packagePrice", e.target.value)}
+                      onChange={(e) =>
+                        setPackageField("packagePrice", e.target.value)
+                      }
                       placeholder="720"
                       inputMode="decimal"
                     />
                   </Field>
-                  <Field label="Créditos restantes">
+                  <Field label="Créditos restantes" error={err("creditsLeft")}>
                     <input
-                      className={inputClass}
+                      className={
+                        err("creditsLeft") ? inputErrorClass : inputClass
+                      }
                       value={form.creditsLeft}
                       onChange={(e) => set("creditsLeft", e.target.value)}
                       placeholder="4"

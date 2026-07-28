@@ -9,15 +9,17 @@ import {
   Plus,
   Wallet,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
 import {
   ChargeEditDrawer,
   emptyManualCharge,
 } from "@/components/financeiro/ChargeEditDrawer";
 import { FinanceCalendar } from "@/components/financeiro/FinanceCalendar";
+import { FinanceProPreview } from "@/components/financeiro/FinanceProPreview";
 import { PaidMark } from "@/components/shared/PaidMark";
 import { useFinance } from "@/hooks/useFinance";
+import { fetchSessionUser, getCachedUser } from "@/lib/auth";
 import { AGENDA_TODAY, parseISODate, toLocalISODate } from "@/lib/agenda";
 import {
   formatBRL,
@@ -28,6 +30,7 @@ import {
   type FinanceCharge,
   type PaymentStatus,
 } from "@/lib/finance";
+import { hasFinanceAccess } from "@/lib/plans";
 
 type Period = "hoje" | "semana" | "mes";
 
@@ -61,6 +64,54 @@ function inPeriod(iso: string, period: Period, today: Date) {
 }
 
 export function FinanceiroPage() {
+  const [plan, setPlan] = useState(getCachedUser()?.plan ?? "");
+  const [planReady, setPlanReady] = useState(Boolean(getCachedUser()));
+
+  useEffect(() => {
+    void fetchSessionUser().then((user) => {
+      setPlan(user?.plan ?? "");
+      setPlanReady(true);
+    });
+  }, []);
+
+  const financeUnlocked = hasFinanceAccess(plan);
+
+  if (!planReady) {
+    return (
+      <div className="min-h-screen bg-bg px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+        <div className="mx-auto max-w-[1100px]">
+          <Header />
+          <div className="mt-8 flex justify-center text-[13px] text-muted">
+            Carregando…
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!financeUnlocked) {
+    return (
+      <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-bg px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+        <div className="mx-auto flex min-h-0 w-full max-w-[1100px] flex-1 flex-col gap-3">
+          <Header />
+          <div className="shrink-0">
+            <h1 className="text-xl font-bold tracking-tight text-brand sm:text-2xl">
+              Financeiro
+            </h1>
+            <p className="mt-0.5 text-[12px] text-muted sm:text-[13px]">
+              Prévia do painel Pro — veja o que você está deixando de controlar
+            </p>
+          </div>
+          <FinanceProPreview />
+        </div>
+      </div>
+    );
+  }
+
+  return <FinanceiroPageContent />;
+}
+
+function FinanceiroPageContent() {
   const {
     entries,
     patients,

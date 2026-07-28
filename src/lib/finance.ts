@@ -5,6 +5,7 @@ import {
   type Patient,
   type PaymentMethod,
 } from "@/lib/patients";
+import { readUserStorage, writeUserStorage } from "@/lib/user-storage";
 
 export { ensurePatientSaved };
 
@@ -198,10 +199,10 @@ function normalizeCharge(raw: Partial<FinanceCharge> & FinanceCharge): FinanceCh
 export function loadFinance(): FinanceCharge[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(FINANCE_KEY);
+    const raw = readUserStorage(FINANCE_KEY);
     if (!raw) {
-      // migrate v2 if present
-      const legacy = localStorage.getItem("myhub_finance_v2");
+      // migrate v2 if present (scoped; readUserStorage also migrates legacy)
+      const legacy = readUserStorage("myhub_finance_v2");
       if (legacy) {
         const parsed = JSON.parse(legacy) as FinanceCharge[];
         if (Array.isArray(parsed) && parsed.length) {
@@ -224,9 +225,14 @@ export function loadFinance(): FinanceCharge[] {
   }
 }
 
-export function saveFinance(entries: FinanceCharge[]) {
-  localStorage.setItem(FINANCE_KEY, JSON.stringify(entries));
-  window.dispatchEvent(new Event(FINANCE_EVENT));
+export function saveFinance(
+  entries: FinanceCharge[],
+  opts?: { silent?: boolean },
+) {
+  writeUserStorage(FINANCE_KEY, JSON.stringify(entries));
+  if (!opts?.silent) {
+    window.dispatchEvent(new Event(FINANCE_EVENT));
+  }
 }
 
 export function findEntryForAppointment(

@@ -38,13 +38,21 @@ export function FinanceCalendar({
   onEdit: (charge: FinanceCharge, appointment?: DatedAppointment) => void;
 }) {
   const {
+    today,
     cursor,
     setCursor,
     selected,
     setSelected,
-    appointmentDates,
     goToday,
   } = useAgendaMonth();
+
+  const appointmentDates = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of getDatedAppointments()) {
+      map.set(a.date, (map.get(a.date) ?? 0) + 1);
+    }
+    return map;
+  }, [entries, patients]);
 
   function patientFor(name: string) {
     return patients.find(
@@ -88,6 +96,7 @@ export function FinanceCalendar({
       <AgendaMonthGrid
         cursor={cursor}
         selected={selected}
+        today={today}
         appointmentDates={appointmentDates}
         dayMarks={moneyDates}
         onSelect={setSelected}

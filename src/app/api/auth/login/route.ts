@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { createSession, toPublicUser, verifyPassword } from "@/lib/session";
+import {
+  createSession,
+  hashPassword,
+  needsPasswordRehash,
+  toPublicUser,
+  verifyPassword,
+} from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
@@ -32,9 +38,17 @@ export async function POST(request: Request) {
       );
     }
 
-    await createSession(user.id);
+    let nextUser = user;
+    if (needsPasswordRehash(user.passwordHash)) {
+      nextUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: hashPassword(password) },
+      });
+    }
 
-    return NextResponse.json({ user: toPublicUser(user) });
+    await createSession(nextUser.id);
+
+    return NextResponse.json({ user: toPublicUser(nextUser) });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Falha ao entrar." }, { status: 500 });

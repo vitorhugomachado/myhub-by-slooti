@@ -90,16 +90,12 @@ export async function loginWithEmail(input: {
   return { ok: true, user: data.user };
 }
 
-export async function loginWithGoogle(input: {
-  email: string;
-  name: string;
-  picture?: string;
-}): Promise<AuthResult> {
+export async function loginWithGoogle(): Promise<AuthResult> {
   const res = await fetch("/api/auth/google-session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(input),
+    body: JSON.stringify({}),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -116,6 +112,10 @@ export async function logout() {
       credentials: "include",
     });
   } finally {
+    if (typeof window !== "undefined") {
+      const { clearLocalUserData } = await import("@/lib/user-storage");
+      clearLocalUserData();
+    }
     setCachedUser(null);
   }
 }

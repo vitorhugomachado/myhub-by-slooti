@@ -1,3 +1,5 @@
+import { readUserStorage, writeUserStorage } from "@/lib/user-storage";
+
 export type SessionReport = {
   id: string;
   appointmentId: number;
@@ -18,7 +20,7 @@ export const SESSION_REPORTS_EVENT = "myhub:session-reports";
 export function loadSessionReports(): SessionReport[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(SESSION_REPORTS_KEY);
+    const raw = readUserStorage(SESSION_REPORTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SessionReport[];
     return Array.isArray(parsed) ? parsed : [];
@@ -27,9 +29,14 @@ export function loadSessionReports(): SessionReport[] {
   }
 }
 
-export function saveSessionReports(items: SessionReport[]) {
-  localStorage.setItem(SESSION_REPORTS_KEY, JSON.stringify(items));
-  window.dispatchEvent(new Event(SESSION_REPORTS_EVENT));
+export function saveSessionReports(
+  items: SessionReport[],
+  opts?: { silent?: boolean },
+) {
+  writeUserStorage(SESSION_REPORTS_KEY, JSON.stringify(items));
+  if (!opts?.silent) {
+    window.dispatchEvent(new Event(SESSION_REPORTS_EVENT));
+  }
 }
 
 export function getReportByAppointment(appointmentId: number) {

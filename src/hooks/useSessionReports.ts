@@ -25,7 +25,7 @@ async function fetchReports(params?: {
   if (!res.ok) throw new Error("session_reports_fetch_failed");
   const data = (await res.json()) as { reports: SessionReport[] };
   if (!params?.patient && params?.appointmentId == null) {
-    saveSessionReports(data.reports);
+    saveSessionReports(data.reports, { silent: true });
   }
   return data.reports;
 }
@@ -82,7 +82,7 @@ export function useSessionReports(opts?: { patientName?: string }) {
           idx >= 0
             ? prev.map((r, i) => (i === idx ? data.report : r))
             : [data.report, ...prev];
-        saveSessionReports(next);
+        saveSessionReports(next, { silent: true });
         return next;
       });
       window.dispatchEvent(new Event(SESSION_REPORTS_EVENT));

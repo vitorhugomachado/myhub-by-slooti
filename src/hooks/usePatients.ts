@@ -11,7 +11,7 @@ async function fetchPatients(): Promise<Patient[]> {
   const res = await fetch("/api/patients", { credentials: "include" });
   if (!res.ok) throw new Error("patients_fetch_failed");
   const data = (await res.json()) as { patients: Patient[] };
-  savePatients(data.patients);
+  savePatients(data.patients, { silent: true });
   return data.patients;
 }
 
@@ -23,7 +23,10 @@ async function persistPatients(patients: Patient[]) {
     body: JSON.stringify({ patients }),
   });
   if (!res.ok) {
-    throw new Error("Falha ao salvar pacientes no servidor.");
+    const data = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(data?.error || "Falha ao salvar pacientes no servidor.");
   }
   window.dispatchEvent(new Event(PATIENTS_EVENT));
 }
@@ -45,9 +48,11 @@ export function usePatients() {
       }
     }
     void sync();
-    window.addEventListener(PATIENTS_EVENT, () => void sync());
+    const onEvent = () => void sync();
+    window.addEventListener(PATIENTS_EVENT, onEvent);
     return () => {
       cancelled = true;
+      window.removeEventListener(PATIENTS_EVENT, onEvent);
     };
   }, []);
 
@@ -58,7 +63,17 @@ export function usePatients() {
         next = typeof updater === "function" ? updater(prev) : updater;
         return next;
       });
-      await persistPatients(next);
+      try {
+        await persistPatients(next);
+      } catch (error) {
+        try {
+          const fresh = await fetchPatients();
+          setPatientsState(fresh);
+        } catch {
+          /* keep optimistic state if refetch fails */
+        }
+        throw error;
+      }
     },
     [],
   );

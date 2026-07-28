@@ -1,4 +1,6 @@
 import type { Patient as DbPatient } from "@/generated/prisma";
+import { resolveAvatar } from "@/lib/avatar";
+import { isValidBirthDate } from "@/lib/dates";
 import type { Patient } from "@/lib/patients";
 import type { FinanceCharge } from "@/lib/finance";
 import type { ScheduleItem } from "@/lib/schedule";
@@ -9,13 +11,13 @@ import type { SessionReport } from "@/lib/session-reports";
 export function toPatient(p: DbPatient): Patient {
   return {
     id: p.id,
-    avatar: p.avatar,
+    avatar: resolveAvatar(p.avatar),
     fullName: p.fullName,
     socialName: p.socialName,
     email: p.email,
     phone: p.phone,
     whatsapp: p.whatsapp,
-    birthDate: p.birthDate,
+    birthDate: isValidBirthDate(p.birthDate) ? p.birthDate : "",
     cpf: p.cpf,
     rg: p.rg,
     gender: p.gender,
@@ -59,14 +61,17 @@ export function toPatient(p: DbPatient): Patient {
 }
 
 export function patientWriteData(p: Partial<Patient> & { fullName: string }) {
+  const birthDate =
+    p.birthDate && isValidBirthDate(p.birthDate) ? p.birthDate : "";
+
   return {
     avatar: p.avatar ?? "",
-    fullName: p.fullName,
+    fullName: p.fullName.trim(),
     socialName: p.socialName ?? "",
     email: p.email ?? "",
     phone: p.phone ?? "",
     whatsapp: p.whatsapp ?? "",
-    birthDate: p.birthDate ?? "",
+    birthDate,
     cpf: p.cpf ?? "",
     rg: p.rg ?? "",
     gender: p.gender ?? "",
@@ -90,22 +95,22 @@ export function patientWriteData(p: Partial<Patient> & { fullName: string }) {
     medications: p.medications ?? "",
     allergies: p.allergies ?? "",
     diagnosis: p.diagnosis ?? "",
-    approach: p.approach ?? "TCC",
+    approach: p.approach || "TCC",
     referralSource: p.referralSource ?? "",
-    status: p.status ?? "ativo",
-    preferredMode: p.preferredMode ?? "Online",
-    sessionFrequency: p.sessionFrequency ?? "Semanal",
+    status: p.status || "ativo",
+    preferredMode: p.preferredMode || "Online",
+    sessionFrequency: p.sessionFrequency || "Semanal",
     sessionValue: p.sessionValue ?? "",
-    paymentMethod: p.paymentMethod ?? "Pix",
-    billingMode: p.billingMode ?? "avulso",
-    packageSize: p.packageSize ?? "4",
-    creditsLeft: p.creditsLeft ?? "0",
+    paymentMethod: p.paymentMethod || "Pix",
+    billingMode: p.billingMode || "avulso",
+    packageSize: p.packageSize || "4",
+    creditsLeft: p.creditsLeft || "0",
     packagePrice: p.packagePrice ?? "",
     renewalDue: Boolean(p.renewalDue),
     lgpdConsent: Boolean(p.lgpdConsent),
     notes: p.notes ?? "",
-    startedAt: p.startedAt ?? new Date().toISOString().slice(0, 10),
-    createdAt: p.createdAt ?? new Date().toISOString().slice(0, 10),
+    startedAt: p.startedAt || new Date().toISOString().slice(0, 10),
+    createdAt: p.createdAt || new Date().toISOString().slice(0, 10),
   };
 }
 
@@ -215,7 +220,7 @@ export function toAppointment(a: {
     type: a.type,
     mode: a.mode as ScheduleItem["mode"],
     status: a.status as ScheduleItem["status"],
-    avatar: a.avatar,
+    avatar: resolveAvatar(a.avatar),
     meetUri: a.meetUri || undefined,
     meetSpaceName: a.meetSpaceName || undefined,
     meetMock: a.meetMock ?? undefined,
@@ -223,5 +228,9 @@ export function toAppointment(a: {
 }
 
 export function toProfile(data: unknown): PsychologistProfile {
-  return data as PsychologistProfile;
+  const profile = data as PsychologistProfile;
+  return {
+    ...profile,
+    avatar: resolveAvatar(profile?.avatar),
+  };
 }

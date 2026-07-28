@@ -151,7 +151,7 @@ body {
   animation: live-dot-blink 2.4s ease-in-out infinite;
 }
 
-/* Header nav — scroll horizontal sem perder a pílula */
+/* Header nav — toggle suave + scroll horizontal */
 .header-nav {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -166,6 +166,23 @@ body {
 
 .header-nav::-webkit-scrollbar {
   display: none;
+}
+
+.header-nav-pill {
+  will-change: left, width;
+}
+
+.header-nav-pill--animate {
+  transition:
+    left 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-nav-pill--animate {
+    transition-duration: 1ms;
+  }
 }
 
 @media (min-width: 1024px) {

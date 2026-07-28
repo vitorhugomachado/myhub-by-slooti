@@ -1,10 +1,10 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useAgendaToday } from "@/hooks/useAgendaClock";
 import {
-  AGENDA_TODAY,
-  getDatedAppointments,
+  agendaToday,
   parseISODate,
   toLocalISODate,
 } from "@/lib/agenda";
@@ -24,33 +24,43 @@ function monthMatrix(year: number, month: number) {
   return cells;
 }
 
-export function useAgendaMonth(initialSelected = AGENDA_TODAY) {
-  const reference = useMemo(() => parseISODate(AGENDA_TODAY), []);
-  const [cursor, setCursor] = useState(
-    () => new Date(reference.getFullYear(), reference.getMonth(), 1),
+export function useAgendaMonth(initialSelected?: string) {
+  const today = useAgendaToday();
+  const [selected, setSelected] = useState(
+    () => initialSelected ?? agendaToday(),
   );
-  const [selected, setSelected] = useState(initialSelected);
+  const [cursor, setCursor] = useState(() => {
+    const d = parseISODate(initialSelected ?? agendaToday());
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [pinnedToToday, setPinnedToToday] = useState(!initialSelected);
 
-  const appointmentDates = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const a of getDatedAppointments()) {
-      map.set(a.date, (map.get(a.date) ?? 0) + 1);
-    }
-    return map;
-  }, []);
+  // Meia-noite / mudança de dia: se estávamos no "hoje", acompanhar o relógio
+  useEffect(() => {
+    if (!pinnedToToday) return;
+    setSelected(today);
+    const d = parseISODate(today);
+    setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+  }, [today, pinnedToToday]);
 
   function goToday() {
-    setCursor(new Date(reference.getFullYear(), reference.getMonth(), 1));
-    setSelected(AGENDA_TODAY);
+    const d = parseISODate(today);
+    setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+    setSelected(today);
+    setPinnedToToday(true);
+  }
+
+  function selectDay(iso: string) {
+    setSelected(iso);
+    setPinnedToToday(iso === today);
   }
 
   return {
-    reference,
+    today,
     cursor,
     setCursor,
     selected,
-    setSelected,
-    appointmentDates,
+    setSelected: selectDay,
     goToday,
   };
 }
@@ -58,6 +68,7 @@ export function useAgendaMonth(initialSelected = AGENDA_TODAY) {
 export function AgendaMonthGrid({
   cursor,
   selected,
+  today,
   appointmentDates,
   dayMarks,
   onSelect,
@@ -67,6 +78,8 @@ export function AgendaMonthGrid({
 }: {
   cursor: Date;
   selected: string;
+  /** ISO de hoje pelo relógio ao vivo */
+  today: string;
   appointmentDates: Map<string, number>;
   dayMarks?: Map<string, boolean>;
   onSelect: (iso: string) => void;
@@ -133,7 +146,7 @@ export function AgendaMonthGrid({
           const iso = toLocalISODate(date);
           const count = appointmentDates.get(iso) ?? 0;
           const isSelected = iso === selected;
-          const isToday = iso === AGENDA_TODAY;
+          const isToday = iso === today;
           const marked = dayMarks?.get(iso) && count > 0;
 
           return (

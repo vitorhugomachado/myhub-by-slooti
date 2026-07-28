@@ -12,7 +12,7 @@ async function fetchPendencies(): Promise<Pendency[]> {
   const res = await fetch("/api/pendencies", { credentials: "include" });
   if (!res.ok) throw new Error("pendencies_fetch_failed");
   const data = (await res.json()) as { pendencies: Pendency[] };
-  savePendencies(data.pendencies);
+  savePendencies(data.pendencies, { silent: true });
   return data.pendencies;
 }
 
@@ -72,7 +72,7 @@ export function usePendencies() {
         const next = exists
           ? prev.map((p) => (p.id === data.pendency.id ? data.pendency : p))
           : [data.pendency, ...prev];
-        savePendencies(next);
+        savePendencies(next, { silent: true });
         return next;
       });
       window.dispatchEvent(new Event(PENDENCIES_EVENT));
@@ -93,7 +93,7 @@ export function usePendencies() {
       const next = prev.map((p) =>
         p.id === id ? { ...p, status: "done" as const } : p,
       );
-      savePendencies(next);
+      savePendencies(next, { silent: true });
       return next;
     });
     window.dispatchEvent(new Event(PENDENCIES_EVENT));

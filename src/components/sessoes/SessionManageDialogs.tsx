@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { useAgendaToday } from "@/hooks/useAgendaClock";
+import { useSchedule } from "@/hooks/useSchedule";
 import {
-  AGENDA_TODAY,
   formatDayLabel,
   parseISODate,
   toLocalISODate,
@@ -20,7 +21,6 @@ import {
 } from "@/lib/agenda";
 import { formatFinanceDate } from "@/lib/finance";
 import { addMinutesToTime } from "@/lib/schedule";
-import { useSchedule } from "@/hooks/useSchedule";
 
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const DRAG_TYPE = "application/x-myhub-reschedule";
@@ -79,15 +79,16 @@ export function RescheduleDialog({
   onSave: (patch: { date: string; start: string; end: string }) => void;
 }) {
   const { forDate } = useSchedule();
-  const reference = useMemo(() => parseISODate(AGENDA_TODAY), []);
+  const today = useAgendaToday();
   const [visible, setVisible] = useState(false);
   const [date, setDate] = useState(appointment.date);
   const [start, setStart] = useState(appointment.start);
   const [end, setEnd] = useState(appointment.end);
   const [slotsDay, setSlotsDay] = useState<string | null>(appointment.date);
-  const [cursor, setCursor] = useState(
-    () => new Date(reference.getFullYear(), reference.getMonth(), 1),
-  );
+  const [cursor, setCursor] = useState(() => {
+    const d = parseISODate(appointment.date);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
   const [dragging, setDragging] = useState(false);
   const [dropOverDay, setDropOverDay] = useState<string | null>(null);
   const [dropOverSlot, setDropOverSlot] = useState<string | null>(null);
@@ -350,14 +351,9 @@ export function RescheduleDialog({
                 <button
                   type="button"
                   onClick={() => {
-                    setCursor(
-                      new Date(
-                        reference.getFullYear(),
-                        reference.getMonth(),
-                        1,
-                      ),
-                    );
-                    openDay(AGENDA_TODAY);
+                    const d = parseISODate(today);
+                    setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+                    openDay(today);
                   }}
                   className="rounded-full px-3 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:bg-bg hover:text-brand"
                 >
@@ -397,7 +393,7 @@ export function RescheduleDialog({
 
                 const iso = toLocalISODate(cell);
                 const isSelected = iso === date || iso === previewDay;
-                const isToday = iso === AGENDA_TODAY;
+                const isToday = iso === today;
                 const isCurrent = iso === appointment.date;
                 const isDropTarget = dropOverDay === iso;
 

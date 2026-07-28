@@ -1,3 +1,6 @@
+import { DEFAULT_AVATAR } from "@/lib/avatar";
+import { readUserStorage, writeUserStorage } from "@/lib/user-storage";
+
 export type PatientStatus = "ativo" | "pausado" | "alta";
 export type SessionMode = "Presencial" | "Online" | "Híbrido";
 export type PaymentMethod = "Pix" | "Cartão" | "Dinheiro" | "Convênio" | "Transferência";
@@ -321,9 +324,7 @@ export function normalizePatient(
     ...p,
     id: p.id,
     fullName: p.fullName,
-    avatar:
-      p.avatar ||
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&h=96&fit=crop&crop=face",
+    avatar: p.avatar || DEFAULT_AVATAR,
     createdAt: p.createdAt ?? new Date().toISOString().slice(0, 10),
     billingMode: p.billingMode ?? "avulso",
     packageSize: p.packageSize ?? "4",
@@ -336,7 +337,7 @@ export function normalizePatient(
 export function loadPatients(): Patient[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = readUserStorage(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Patient[];
     return Array.isArray(parsed) ? parsed.map((p) => normalizePatient(p)) : [];
@@ -345,9 +346,14 @@ export function loadPatients(): Patient[] {
   }
 }
 
-export function savePatients(patients: Patient[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
-  window.dispatchEvent(new Event(PATIENTS_EVENT));
+export function savePatients(
+  patients: Patient[],
+  opts?: { silent?: boolean },
+) {
+  writeUserStorage(STORAGE_KEY, JSON.stringify(patients));
+  if (!opts?.silent) {
+    window.dispatchEvent(new Event(PATIENTS_EVENT));
+  }
 }
 
 export function ensurePatientSaved(patient: Patient) {
@@ -384,9 +390,7 @@ export function ensurePatientByName(
   const stub = normalizePatient({
     id: `p-${slug || "paciente"}-${Date.now().toString(36)}`,
     fullName: fullName.trim(),
-    avatar:
-      opts?.avatar ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName.trim())}&background=7dffb3&color=14161a&bold=true`,
+    avatar: opts?.avatar || DEFAULT_AVATAR,
     notes:
       "Cadastro criado a partir da agenda. Complete os dados do paciente.",
   });

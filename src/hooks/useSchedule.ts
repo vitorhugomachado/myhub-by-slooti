@@ -4,28 +4,36 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DatedAppointment } from "@/lib/agenda";
 import {
   activeAppointments,
+  addAppointment,
   cancelAppointment,
   completeAppointment,
   rescheduleAppointment,
   saveSchedule,
   SCHEDULE_EVENT,
+  type AddAppointmentInput,
 } from "@/lib/schedule";
 
 async function fetchSchedule(): Promise<DatedAppointment[]> {
   const res = await fetch("/api/schedule", { credentials: "include" });
   if (!res.ok) throw new Error("schedule_fetch_failed");
   const data = (await res.json()) as { items: DatedAppointment[] };
-  saveSchedule(data.items);
+  saveSchedule(data.items, { silent: true });
   return data.items;
 }
 
 async function persistSchedule(items: DatedAppointment[]) {
-  await fetch("/api/schedule", {
+  const res = await fetch("/api/schedule", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ items }),
   });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(data?.error || "Falha ao salvar a agenda.");
+  }
   window.dispatchEvent(new Event(SCHEDULE_EVENT));
 }
 
@@ -46,9 +54,11 @@ export function useSchedule() {
       }
     }
     void sync();
-    window.addEventListener(SCHEDULE_EVENT, () => void sync());
+    const onEvent = () => void sync();
+    window.addEventListener(SCHEDULE_EVENT, onEvent);
     return () => {
       cancelled = true;
+      window.removeEventListener(SCHEDULE_EVENT, onEvent);
     };
   }, []);
 
@@ -79,6 +89,28 @@ export function useSchedule() {
     [],
   );
 
+  const add = useCallback(async (input: AddAppointmentInput) => {
+    let next: DatedAppointment[] = [];
+    let previous: DatedAppointment[] = [];
+    setItems((prev) => {
+      previous = prev;
+      next = addAppointment(prev, input);
+      return next;
+    });
+    try {
+      await persistSchedule(next);
+    } catch (error) {
+      setItems(previous);
+      throw error;
+    }
+    return next.find(
+      (a) =>
+        a.date === input.date &&
+        a.start === input.start &&
+        a.patient === input.patient,
+    );
+  }, []);
+
   const active = useMemo(() => activeAppointments(items), [items]);
 
   const forDate = useCallback(
@@ -103,6 +135,7 @@ export function useSchedule() {
     items,
     active,
     hydrated,
+    add,
     cancel,
     complete,
     reschedule,

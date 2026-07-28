@@ -117,7 +117,7 @@ export function SessoesPage() {
               Agenda
             </h1>
             <p className="mt-1 text-[13px] text-muted">
-              Calendário de atendimentos — cancele ou remarque sessões
+              Lista de horários — adicione pacientes, remarque ou cancele sessões
             </p>
           </div>
 

@@ -42,6 +42,32 @@ export async function PUT(request: Request) {
   const body = (await request.json()) as { entries?: FinanceCharge[] };
   const entries = Array.isArray(body.entries) ? body.entries : [];
 
+  const patientIds = [
+    ...new Set(
+      entries
+        .map((e) => e.patientId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  if (patientIds.length > 0) {
+    const owned = await prisma.patient.findMany({
+      where: { userId: user.id, id: { in: patientIds } },
+      select: { id: true },
+    });
+    const ownedSet = new Set(owned.map((p) => p.id));
+    const foreign = patientIds.filter((id) => !ownedSet.has(id));
+    if (foreign.length > 0) {
+      return NextResponse.json(
+        {
+          error: "invalid_patient",
+          message: "Paciente não pertence à sua conta.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.financeCharge.deleteMany({ where: { userId: user.id } });
     if (entries.length) {

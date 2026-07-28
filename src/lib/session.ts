@@ -1,8 +1,16 @@
-import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import {
+  createHash,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 
 export const SESSION_COOKIE = "myhub_session";
+
+const DEV_SESSION_FALLBACK = "myhub-dev-secret-change-me";
+const SCRYPT_PREFIX = "scrypt$";
 
 export type SessionUser = {
   id: string;
@@ -14,21 +22,70 @@ export type SessionUser = {
 };
 
 function sessionSecret() {
-  return process.env.SESSION_SECRET || "myhub-dev-secret-change-me";
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    const weak =
+      !secret ||
+      secret === DEV_SESSION_FALLBACK ||
+      secret === "change-me-in-production" ||
+      secret.length < 24;
+    if (weak) {
+      throw new Error(
+        "SESSION_SECRET deve ser forte em produção (mín. 24 chars aleatórios; recomendado 32+).",
+      );
+    }
+    return secret;
+  }
+  return secret || DEV_SESSION_FALLBACK;
 }
 
-export function hashPassword(password: string) {
+function passwordPepper() {
+  // Pepper dedicado; cai no SESSION_SECRET para hashes legados já gravados.
+  return (
+    process.env.PASSWORD_PEPPER?.trim() ||
+    process.env.SESSION_SECRET?.trim() ||
+    DEV_SESSION_FALLBACK
+  );
+}
+
+function legacyHashPassword(password: string) {
   return createHash("sha256")
-    .update(`${sessionSecret()}:${password}`)
+    .update(`${passwordPepper()}:${password}`)
     .digest("hex");
 }
 
+/** Hash de senha com scrypt (novo). Mantém compatibilidade com SHA256 legado. */
+export function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${SCRYPT_PREFIX}${salt}$${hash}`;
+}
+
 export function verifyPassword(password: string, passwordHash: string) {
-  const next = hashPassword(password);
-  const a = Buffer.from(next);
+  if (!passwordHash) return false;
+
+  if (passwordHash.startsWith(SCRYPT_PREFIX)) {
+    const parts = passwordHash.split("$");
+    const salt = parts[1];
+    const expected = parts[2];
+    if (!salt || !expected) return false;
+    const next = scryptSync(password, salt, 64);
+    const a = Buffer.from(expected, "hex");
+    if (a.length !== next.length) return false;
+    return timingSafeEqual(a, next);
+  }
+
+  // Legado SHA256 (usuários criados antes do upgrade)
+  const legacy = legacyHashPassword(password);
+  const a = Buffer.from(legacy);
   const b = Buffer.from(passwordHash);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+/** True se o hash ainda é o formato antigo e deve ser regravado no login. */
+export function needsPasswordRehash(passwordHash: string) {
+  return Boolean(passwordHash) && !passwordHash.startsWith(SCRYPT_PREFIX);
 }
 
 function sign(value: string) {

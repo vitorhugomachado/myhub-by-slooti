@@ -2,18 +2,28 @@
 
 import { ChevronRight } from "lucide-react";
 import { useMemo } from "react";
+import { useAgendaToday } from "@/hooks/useAgendaClock";
 import { useSchedule } from "@/hooks/useSchedule";
-import { AGENDA_TODAY, buildUpcomingDays, type LiveUpcomingDay } from "@/lib/agenda";
+import {
+  buildUpcomingDays,
+  resolveDashboardAgendaFocus,
+  type LiveUpcomingDay,
+} from "@/lib/agenda";
 
 export function UpcomingDays({
   onSelect,
 }: {
   onSelect: (day: LiveUpcomingDay) => void;
 }) {
-  const { active } = useSchedule();
+  const { active, items } = useSchedule();
+  const today = useAgendaToday();
+  const focus = useMemo(
+    () => resolveDashboardAgendaFocus(items, today),
+    [items, today],
+  );
   const days = useMemo(
-    () => buildUpcomingDays(active, AGENDA_TODAY),
-    [active],
+    () => buildUpcomingDays(active, focus.date),
+    [active, focus.date],
   );
 
   return (

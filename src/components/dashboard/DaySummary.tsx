@@ -1,21 +1,28 @@
 "use client";
 
 import { CalendarDays, CheckCircle2, Clock } from "lucide-react";
+import { useMemo } from "react";
+import { useAgendaToday } from "@/hooks/useAgendaClock";
 import { useSchedule } from "@/hooks/useSchedule";
-import { AGENDA_TODAY } from "@/lib/agenda";
+import { resolveDashboardAgendaFocus } from "@/lib/agenda";
 
 export function DaySummary() {
-  const { forDate } = useSchedule();
-  const todayItems = forDate(AGENDA_TODAY, false);
-  const total = todayItems.length;
-  const done = todayItems.filter((a) => a.status === "done").length;
-  const remaining = todayItems.filter(
+  const { items, forDate } = useSchedule();
+  const today = useAgendaToday();
+  const focus = useMemo(
+    () => resolveDashboardAgendaFocus(items, today),
+    [items, today],
+  );
+  const dayItems = forDate(focus.date, false);
+  const total = dayItems.length;
+  const done = dayItems.filter((a) => a.status === "done").length;
+  const remaining = dayItems.filter(
     (a) => a.status === "now" || a.status === "upcoming",
   ).length;
 
-  const items = [
+  const itemsCard = [
     {
-      label: "Hoje",
+      label: focus.shortLabel,
       value: total,
       icon: CalendarDays,
       tone: "bg-surface text-brand",
@@ -36,7 +43,7 @@ export function DaySummary() {
 
   return (
     <div className="grid grid-cols-3 gap-3">
-      {items.map((item) => {
+      {itemsCard.map((item) => {
         const Icon = item.icon;
         return (
           <article

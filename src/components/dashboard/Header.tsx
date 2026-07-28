@@ -10,46 +10,26 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { MegaNav } from "@/components/dashboard/MegaNav";
 import { PsychologistProfileForm } from "@/components/profile/PsychologistProfileForm";
 import { useProfile } from "@/hooks/useProfile";
 import { fetchSessionUser, getCachedUser, logout } from "@/lib/auth";
-import { navItems } from "@/lib/mock-data";
+import { resolveAvatar } from "@/lib/avatar";
 import { hasFinanceAccess } from "@/lib/plans";
 import { profileDisplayName } from "@/lib/profile";
 
-function isActivePath(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  if (href === "#") return false;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
 export function Header() {
-  const pathname = usePathname();
   const router = useRouter();
   const { profile, update } = useProfile();
-  const navRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
-  const [pill, setPill] = useState({ left: 0, width: 0, ready: false });
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showFinance, setShowFinance] = useState(false);
 
   const displayName = profileDisplayName(profile);
-  const visibleNav = useMemo(
-    () => navItems.filter((item) => item.href !== "/financeiro" || showFinance),
-    [showFinance],
-  );
 
   useEffect(() => {
     const cached = getCachedUser();
@@ -60,65 +40,6 @@ export function Header() {
       setShowFinance(hasFinanceAccess(user?.plan));
     });
   }, []);
-
-  const updatePill = useCallback(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    const activeIndex = visibleNav.findIndex((item) =>
-      isActivePath(pathname, item.href),
-    );
-    const el = itemRefs.current[activeIndex];
-    if (!el || activeIndex < 0) {
-      setPill((prev) => ({ ...prev, ready: false, width: 0 }));
-      return;
-    }
-
-    setPill({
-      left: el.offsetLeft,
-      width: el.offsetWidth,
-      ready: true,
-    });
-  }, [pathname, visibleNav]);
-
-  useLayoutEffect(() => {
-    updatePill();
-  }, [updatePill]);
-
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    const onResize = () => updatePill();
-    const onScroll = () => updatePill();
-    window.addEventListener("resize", onResize);
-    nav.addEventListener("scroll", onScroll, { passive: true });
-
-    const ro = new ResizeObserver(onResize);
-    ro.observe(nav);
-    itemRefs.current.forEach((el) => el && ro.observe(el));
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      nav.removeEventListener("scroll", onScroll);
-      ro.disconnect();
-    };
-  }, [updatePill]);
-
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const activeIndex = visibleNav.findIndex((item) =>
-      isActivePath(pathname, item.href),
-    );
-    const el = itemRefs.current[activeIndex];
-    if (!el) return;
-    el.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
-  }, [pathname, visibleNav]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -159,7 +80,7 @@ export function Header() {
 
   return (
     <>
-      <header className="card grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2.5 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
+      <header className="card relative z-40 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2.5 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
         <Link href="/" className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           <div className="flex size-9 items-center justify-center rounded-full bg-brand text-card">
             <TrendingUp className="size-[18px]" strokeWidth={2.5} />
@@ -169,39 +90,7 @@ export function Header() {
           </span>
         </Link>
 
-        <nav
-          ref={navRef}
-          aria-label="Principal"
-          className="header-nav relative flex min-w-0 items-center justify-start gap-0.5 overflow-x-auto overscroll-x-contain scroll-smooth px-1 lg:justify-center"
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 z-0 h-8 -translate-y-1/2 rounded-full bg-surface transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
-            style={{
-              left: pill.left,
-              width: pill.width,
-              opacity: pill.ready ? 1 : 0,
-            }}
-          />
-
-          {visibleNav.map((item, index) => {
-            const active = isActivePath(pathname, item.href);
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                ref={(node) => {
-                  itemRefs.current[index] = node;
-                }}
-                className={`relative z-10 shrink-0 rounded-full px-2.5 py-1.5 text-[12px] font-medium whitespace-nowrap transition-colors duration-200 sm:px-3.5 sm:text-[13px] ${
-                  active ? "text-brand" : "text-muted hover:text-brand"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <MegaNav showFinance={showFinance} />
 
         <div className="relative shrink-0 justify-self-end" ref={menuRef}>
           <button
@@ -213,15 +102,16 @@ export function Header() {
             className="flex max-w-[min(100%,220px)] items-center gap-2 rounded-full border border-line bg-bg py-1 pr-2 pl-1 transition-colors hover:border-surface sm:gap-2.5 sm:pr-3"
           >
             <Image
-              src={profile.avatar}
+              src={resolveAvatar(profile.avatar)}
               alt=""
               width={32}
               height={32}
               unoptimized={
                 profile.avatar.startsWith("data:") ||
-                profile.avatar.startsWith("blob:")
+                profile.avatar.startsWith("blob:") ||
+                resolveAvatar(profile.avatar).endsWith(".svg")
               }
-              className="size-8 shrink-0 rounded-full object-cover"
+              className="size-8 shrink-0 rounded-full bg-[#E5E7EB] object-cover"
             />
             <span className="hidden min-w-0 text-left md:block">
               <span className="block truncate text-[13px] font-semibold leading-tight text-brand">

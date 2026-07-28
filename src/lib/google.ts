@@ -112,6 +112,60 @@ export async function getGoogleUserInfo(
   };
 }
 
+/** Verifica id_token JWT do Google (aud/iss/exp via tokeninfo). */
+export async function verifyGoogleIdToken(
+  idToken: string,
+): Promise<GoogleUserInfo> {
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+  );
+  if (!res.ok) {
+    throw new Error("id_token inválido");
+  }
+
+  const data = (await res.json()) as {
+    aud?: string;
+    azp?: string;
+    iss?: string;
+    email?: string;
+    email_verified?: string | boolean;
+    name?: string;
+    picture?: string;
+    sub?: string;
+    exp?: string;
+  };
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId || (data.aud !== clientId && data.azp !== clientId)) {
+    throw new Error("id_token com audience inválida");
+  }
+
+  const iss = data.iss ?? "";
+  if (
+    iss !== "https://accounts.google.com" &&
+    iss !== "accounts.google.com"
+  ) {
+    throw new Error("id_token com issuer inválido");
+  }
+
+  if (data.exp && Number(data.exp) * 1000 < Date.now()) {
+    throw new Error("id_token expirado");
+  }
+
+  const verified =
+    data.email_verified === true || data.email_verified === "true";
+  if (!data.email || !verified) {
+    throw new Error("e-mail Google não verificado");
+  }
+
+  return {
+    email: data.email.toLowerCase(),
+    name: data.name ?? "",
+    picture: data.picture,
+    sub: data.sub,
+  };
+}
+
 export async function createMeetSpace(accessToken: string) {
   const res = await fetch("https://meet.googleapis.com/v2/spaces", {
     method: "POST",

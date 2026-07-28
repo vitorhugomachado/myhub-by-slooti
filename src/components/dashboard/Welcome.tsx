@@ -1,15 +1,30 @@
 "use client";
 
 import { useMemo } from "react";
+import { useAgendaToday } from "@/hooks/useAgendaClock";
 import { useProfile } from "@/hooks/useProfile";
 import { useSchedule } from "@/hooks/useSchedule";
-import { AGENDA_TODAY } from "@/lib/agenda";
+import {
+  dayHasOpenSessions,
+  resolveDashboardAgendaFocus,
+} from "@/lib/agenda";
 import { profileDisplayName } from "@/lib/profile";
 
 export function Welcome() {
   const { profile } = useProfile();
-  const { forDate } = useSchedule();
-  const todayItems = forDate(AGENDA_TODAY, false);
+  const { items, forDate } = useSchedule();
+  const today = useAgendaToday();
+
+  const focus = useMemo(
+    () => resolveDashboardAgendaFocus(items, today),
+    [items, today],
+  );
+  const dayItems = forDate(focus.date, false);
+  const todayItems = forDate(today, false);
+  const todayWasFinished =
+    !focus.isToday &&
+    todayItems.length > 0 &&
+    !dayHasOpenSessions(todayItems);
 
   const firstName = useMemo(() => {
     const name = profileDisplayName(profile);
@@ -18,13 +33,13 @@ export function Welcome() {
 
   const nextUp = useMemo(
     () =>
-      todayItems.find((a) => a.status === "now") ??
-      todayItems.find((a) => a.status === "upcoming") ??
+      dayItems.find((a) => a.status === "now") ??
+      dayItems.find((a) => a.status === "upcoming") ??
       null,
-    [todayItems],
+    [dayItems],
   );
 
-  const remaining = todayItems.filter(
+  const remaining = dayItems.filter(
     (a) => a.status === "now" || a.status === "upcoming",
   ).length;
 
@@ -34,11 +49,17 @@ export function Welcome() {
         Olá, {firstName}.
       </h1>
       <p className="text-[13px] font-medium text-muted">
-        {nextUp ? (
+        {todayWasFinished && nextUp ? (
+          <>
+            Agenda de hoje concluída · próximos {remaining} atendimento
+            {remaining === 1 ? "" : "s"} {focus.relativeLabel}
+            {nextUp.start ? ` · às ${nextUp.start}` : ""}
+          </>
+        ) : nextUp ? (
           <>
             Você tem {remaining} atendimento{remaining === 1 ? "" : "s"} restante
-            {remaining === 1 ? "" : "s"} hoje ·{" "}
-            {nextUp.status === "now"
+            {remaining === 1 ? "" : "s"} {focus.relativeLabel} ·{" "}
+            {focus.isToday && nextUp.status === "now"
               ? "em andamento"
               : `próximo às ${nextUp.start}`}
           </>

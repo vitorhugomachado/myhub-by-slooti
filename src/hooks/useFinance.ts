@@ -38,17 +38,17 @@ async function fetchFinance(): Promise<{
     throw new Error("finance_fetch_failed");
   }
   const patients = (await patientsRes.json()) as { patients: Patient[] };
-  savePatients(patients.patients);
+  savePatients(patients.patients, { silent: true });
 
   if (financeRes.status === 403) {
-    saveFinance([]);
+    saveFinance([], { silent: true });
     return { entries: [], patients: patients.patients };
   }
   if (!financeRes.ok) {
     throw new Error("finance_fetch_failed");
   }
   const finance = (await financeRes.json()) as { entries: FinanceCharge[] };
-  saveFinance(finance.entries);
+  saveFinance(finance.entries, { silent: true });
   return { entries: finance.entries, patients: patients.patients };
 }
 
@@ -100,10 +100,13 @@ export function useFinance() {
       }
     }
     void sync();
-    window.addEventListener(FINANCE_EVENT, () => void sync());
-    window.addEventListener(PATIENTS_EVENT, () => void sync());
+    const onEvent = () => void sync();
+    window.addEventListener(FINANCE_EVENT, onEvent);
+    window.addEventListener(PATIENTS_EVENT, onEvent);
     return () => {
       cancelled = true;
+      window.removeEventListener(FINANCE_EVENT, onEvent);
+      window.removeEventListener(PATIENTS_EVENT, onEvent);
     };
   }, []);
 

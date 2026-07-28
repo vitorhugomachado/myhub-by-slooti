@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { patientWriteData, toPatient } from "@/lib/mappers";
+import {
+  toPatientFormData,
+  validatePatientFields,
+} from "@/lib/patient-validation";
 import type { Patient } from "@/lib/patients";
 import { FREE_PATIENT_LIMIT, maxPatientsForPlan } from "@/lib/plans";
 import { getSessionUser } from "@/lib/session";
@@ -41,18 +45,50 @@ export async function PUT(request: Request) {
     );
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.patient.deleteMany({ where: { userId: user.id } });
-    if (patients.length) {
-      await tx.patient.createMany({
-        data: patients.map((p) => ({
-          id: p.id,
-          userId: user.id,
-          ...patientWriteData(p),
-        })),
-      });
+  for (const patient of patients) {
+    if (!patient?.id || !patient.fullName?.trim()) {
+      return NextResponse.json(
+        { error: "Paciente inválido: id e nome são obrigatórios." },
+        { status: 400 },
+      );
     }
-  });
+
+    const result = validatePatientFields(toPatientFormData(patient));
+    if (!result.ok) {
+      const firstError =
+        Object.values(result.errors).find(Boolean) ||
+        "Dados do paciente inválidos.";
+      return NextResponse.json(
+        {
+          error: `${patient.fullName || "Paciente"}: ${firstError}`,
+          errors: result.errors,
+          patientId: patient.id,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.patient.deleteMany({ where: { userId: user.id } });
+      if (patients.length) {
+        await tx.patient.createMany({
+          data: patients.map((p) => ({
+            id: p.id,
+            userId: user.id,
+            ...patientWriteData(p),
+          })),
+        });
+      }
+    });
+  } catch (error) {
+    console.error("[api/patients] PUT failed", error);
+    return NextResponse.json(
+      { error: "Não foi possível salvar os pacientes no banco." },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ ok: true, count: patients.length });
 }

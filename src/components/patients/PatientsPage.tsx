@@ -1,26 +1,17 @@
 "use client";
 
-import {
-  LayoutGrid,
-  List,
-  Mail,
-  MapPin,
-  Phone,
-  Plus,
-  Search,
-  UserRound,
-  Video,
-} from "lucide-react";
-import Image from "next/image";
+import { ClipboardList, FileText, LayoutGrid, List, Mail, MapPin, Phone, Plus, Search, UserRound, Video } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
 import { PatientForm } from "@/components/patients/PatientForm";
+import { Avatar } from "@/components/shared/Avatar";
 import { BillingBadge } from "@/components/shared/BillingBadge";
 import { usePatients } from "@/hooks/usePatients";
 import { usePendencies } from "@/hooks/usePendencies";
 import { fetchSessionUser, getCachedUser } from "@/lib/auth";
+import { DEFAULT_AVATAR } from "@/lib/avatar";
 import { pendencyHref, pendencyLabel } from "@/lib/pendencies";
 import {
   emptyPatient,
@@ -65,9 +56,24 @@ export function PatientsPage() {
     if (!hydrated || deeplinkHandled.current) return;
     const id = searchParams.get("id");
     const name = searchParams.get("name");
-    if (!id && !name) return;
+    const status = searchParams.get("status");
+    const wantsNew = searchParams.get("new") === "1";
+
+    if (status === "ativo" || status === "pausado" || status === "alta") {
+      setStatusFilter(status);
+    }
+
+    if (!id && !name && !wantsNew) {
+      if (status) deeplinkHandled.current = true;
+      return;
+    }
 
     deeplinkHandled.current = true;
+    if (wantsNew) {
+      setEditing(null);
+      setFormOpen(true);
+      return;
+    }
     if (id) {
       const found = patients.find((p) => p.id === id);
       if (found) {
@@ -139,7 +145,12 @@ export function PatientsPage() {
     setFormOpen(true);
   }
 
-  async function handleSave(data: ReturnType<typeof emptyPatient>, id?: string) {
+  async function handleSave(
+    data: ReturnType<typeof emptyPatient> & { avatar: string },
+    id?: string,
+  ) {
+    const avatar = data.avatar?.trim() ? data.avatar : DEFAULT_AVATAR;
+
     if (id) {
       await setPatients((prev) =>
         prev.map((p) =>
@@ -147,6 +158,7 @@ export function PatientsPage() {
             ? {
                 ...p,
                 ...data,
+                avatar,
               }
             : p,
         ),
@@ -165,7 +177,7 @@ export function PatientsPage() {
       ...data,
       id: `p-${Date.now()}`,
       createdAt: new Date().toISOString().slice(0, 10),
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.fullName)}&background=7dffb3&color=14161a&bold=true`,
+      avatar,
     };
     await setPatients((prev) => [newPatient, ...prev]);
   }
@@ -203,6 +215,39 @@ export function PatientsPage() {
             <Plus className="size-4" />
             Novo paciente
           </button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/pacientes/relatos"
+            className="card flex items-center gap-3 p-4 transition-colors hover:border-surface hover:bg-surface-soft/40"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-surface-soft text-brand">
+              <ClipboardList className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[14px] font-semibold text-brand">
+                Relatos de sessões
+              </p>
+              <p className="text-[12px] text-muted">
+                Resumos e evoluções de cada atendimento
+              </p>
+            </div>
+          </Link>
+          <Link
+            href="/pacientes/prontuarios"
+            className="card flex items-center gap-3 p-4 transition-colors hover:border-surface hover:bg-surface-soft/40"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-surface-soft text-brand">
+              <FileText className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[14px] font-semibold text-brand">Prontuários</p>
+              <p className="text-[12px] text-muted">
+                Queixa, diagnóstico e histórico clínico
+              </p>
+            </div>
+          </Link>
         </div>
 
         {limitError && (
@@ -296,14 +341,22 @@ export function PatientsPage() {
                   Limpar filtros
                 </button>
               )}
-              <div className="flex rounded-full border border-line bg-bg p-0.5">
+              <div className="relative flex rounded-full border border-line bg-bg p-0.5">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute top-0.5 left-0.5 size-8 rounded-full bg-surface shadow-[0_1px_2px_rgba(20,22,26,0.06)] transition-transform duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    transform:
+                      viewMode === "list" ? "translateX(100%)" : "translateX(0)",
+                  }}
+                />
                 <button
                   type="button"
                   aria-label="Ver em cards"
                   onClick={() => setViewMode("cards")}
-                  className={`flex size-8 items-center justify-center rounded-full transition-colors ${
+                  className={`relative z-10 flex size-8 items-center justify-center rounded-full transition-colors duration-300 ${
                     viewMode === "cards"
-                      ? "bg-surface text-brand"
+                      ? "text-brand"
                       : "text-muted hover:text-brand"
                   }`}
                 >
@@ -313,9 +366,9 @@ export function PatientsPage() {
                   type="button"
                   aria-label="Ver em lista"
                   onClick={() => setViewMode("list")}
-                  className={`flex size-8 items-center justify-center rounded-full transition-colors ${
+                  className={`relative z-10 flex size-8 items-center justify-center rounded-full transition-colors duration-300 ${
                     viewMode === "list"
-                      ? "bg-surface text-brand"
+                      ? "text-brand"
                       : "text-muted hover:text-brand"
                   }`}
                 >
@@ -360,11 +413,10 @@ export function PatientsPage() {
                 className="card flex flex-col gap-4 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(20,22,26,0.06)]"
               >
                 <div className="flex items-start gap-3">
-                  <Image
+                  <Avatar
                     src={patient.avatar}
                     alt={patient.fullName}
-                    width={48}
-                    height={48}
+                    size={48}
                     className="size-12 shrink-0 rounded-2xl object-cover"
                   />
                   <div className="min-w-0 flex-1">
@@ -468,11 +520,10 @@ export function PatientsPage() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <Image
+                            <Avatar
                               src={patient.avatar}
                               alt={patient.fullName}
-                              width={36}
-                              height={36}
+                              size={36}
                               className="size-9 shrink-0 rounded-full object-cover"
                             />
                             <div className="min-w-0">

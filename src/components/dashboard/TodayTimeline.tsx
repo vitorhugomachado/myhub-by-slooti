@@ -6,11 +6,14 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
-import { useAgendaClock } from "@/hooks/useAgendaClock";
+import { useAgendaClock, useAgendaToday } from "@/hooks/useAgendaClock";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
 import { needsPackageRenewal } from "@/lib/billing";
-import { AGENDA_TODAY, type DatedAppointment } from "@/lib/agenda";
+import {
+  resolveDashboardAgendaFocus,
+  type DatedAppointment,
+} from "@/lib/agenda";
 import type { AppointmentStatus } from "@/lib/mock-data";
 import {
   formatDelay,
@@ -31,16 +34,22 @@ export function TodayTimeline({
   onSelect: (appointment: DatedAppointment) => void;
 }) {
   const { paid, patientByName } = useFinance();
-  const { forDate } = useSchedule();
+  const { items, forDate } = useSchedule();
+  const today = useAgendaToday();
   const now = useAgendaClock();
 
-  const todayItems = forDate(AGENDA_TODAY, true).filter(
+  const focus = useMemo(
+    () => resolveDashboardAgendaFocus(items, today),
+    [items, today],
+  );
+
+  const dayItems = forDate(focus.date, true).filter(
     (a) => a.status !== "cancelled",
   );
-  const doneCount = todayItems.filter((a) => a.status === "done").length;
+  const doneCount = dayItems.filter((a) => a.status === "done").length;
   const lateInfo = useMemo(
-    () => resolveLateQueue(todayItems, now),
-    [todayItems, now],
+    () => (focus.isToday ? resolveLateQueue(dayItems, now) : null),
+    [dayItems, now, focus.isToday],
   );
 
   return (
@@ -48,10 +57,14 @@ export function TodayTimeline({
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-bold tracking-tight text-brand">
-            Agenda de Hoje
+            {focus.title}
           </h2>
           <p className="mt-0.5 text-xs text-muted">
-            {doneCount} de {todayItems.length} atendimentos concluídos
+            {focus.isToday
+              ? `${doneCount} de ${dayItems.length} atendimentos concluídos`
+              : dayItems.length === 0
+                ? "Nenhum atendimento neste dia"
+                : `${dayItems.length} atendimento${dayItems.length === 1 ? "" : "s"} · dia seguinte na fila`}
             {lateInfo ? ` · 1 em atraso (+${formatDelay(lateInfo.lateMs)})` : ""}
           </p>
         </div>
@@ -64,15 +77,17 @@ export function TodayTimeline({
         </Link>
       </div>
 
-      {todayItems.length === 0 ? (
+      {dayItems.length === 0 ? (
         <p className="py-8 text-center text-[13px] text-muted">
-          Nenhum atendimento para hoje.
+          {focus.isToday
+            ? "Nenhum atendimento para hoje."
+            : "Nenhum atendimento neste dia."}
         </p>
       ) : (
         <ol className="flex flex-col">
-          {todayItems.map((item, index) => {
-            const isLast = index === todayItems.length - 1;
-            const isNow = item.status === "now";
+          {dayItems.map((item, index) => {
+            const isLast = index === dayItems.length - 1;
+            const isNow = focus.isToday && item.status === "now";
             const isDone = item.status === "done";
             const isLate = isAppointmentLate(item, lateInfo);
             const isBlocked = lateInfo?.blockedBy.id === item.id && !isDone;

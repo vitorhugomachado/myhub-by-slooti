@@ -1,17 +1,13 @@
+import { DEFAULT_AVATAR } from "@/lib/avatar";
+import { readUserStorage } from "@/lib/user-storage";
+
+export { navItems } from "@/lib/navigation";
+
 export const currentUser = {
   name: "Ana Silva",
   email: "ana.silva@myhub.app",
-  avatar:
-    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=96&h=96&fit=crop&crop=face",
+  avatar: DEFAULT_AVATAR,
 };
-
-export const navItems = [
-  { label: "Dashboard", href: "/" },
-  { label: "Pacientes", href: "/pacientes" },
-  { label: "Financeiro", href: "/financeiro" },
-  { label: "Receita Saúde", href: "/receita-saude" },
-  { label: "Agenda", href: "/agenda" },
-] as const;
 
 export type AppointmentStatus = "done" | "now" | "upcoming" | "cancelled";
 
@@ -313,7 +309,7 @@ export const reminders = [
 export function getAppointmentById(id: number) {
   if (typeof window !== "undefined") {
     try {
-      const raw = localStorage.getItem("myhub_schedule_v1");
+      const raw = readUserStorage("myhub_schedule_v1");
       if (raw) {
         const parsed = JSON.parse(raw) as { id: number }[];
         const live = parsed.find((a) => a.id === id);

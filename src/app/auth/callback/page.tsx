@@ -28,36 +28,7 @@ function AuthCallbackInner() {
         return;
       }
 
-      let email = searchParams.get("email") ?? "";
-      let name = searchParams.get("name") ?? "";
-      let picture = searchParams.get("picture") ?? "";
-
-      if (!email) {
-        try {
-          const res = await fetch("/api/auth/google/me");
-          if (res.ok) {
-            const data = (await res.json()) as {
-              email?: string;
-              name?: string;
-              picture?: string;
-            };
-            email = data.email ?? "";
-            name = data.name ?? name;
-            picture = data.picture ?? picture;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-
-      if (!email) {
-        if (!cancelled) {
-          setError("Não foi possível obter seus dados do Google.");
-        }
-        return;
-      }
-
-      const result = await loginWithGoogle({ email, name, picture });
+      const result = await loginWithGoogle();
       if (!result.ok) {
         if (!cancelled) setError(result.error);
         return;
