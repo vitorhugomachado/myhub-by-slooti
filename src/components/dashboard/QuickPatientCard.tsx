@@ -63,6 +63,7 @@ export function QuickPatientCard({
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleConnected, setGoogleConnected] = useState(false);
 
   const dated = useMemo<DatedAppointment>(() => {
     const live = items.find((a) => a.id === appointment.id);
@@ -115,6 +116,12 @@ export function QuickPatientCard({
           setStoredMeetLink(dated.id, data.link);
         }
       });
+    void fetch("/api/auth/google/status")
+      .then((r) => r.json())
+      .then((data: { connected?: boolean }) => {
+        setGoogleConnected(Boolean(data.connected));
+      })
+      .catch(() => setGoogleConnected(false));
   }, [dated.id]);
 
   const history = useMemo(
@@ -346,19 +353,29 @@ export function QuickPatientCard({
               )}
 
               {!meet ? (
-                <button
-                  type="button"
-                  onClick={() => void generateLink()}
-                  disabled={loading}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-orange py-3 text-[13px] font-bold text-brand transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  {loading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
+                googleConnected ? (
+                  <button
+                    type="button"
+                    onClick={() => void generateLink()}
+                    disabled={loading}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-orange py-3 text-[13px] font-bold text-brand transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {loading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Link2 className="size-4" />
+                    )}
+                    {loading ? "Gerando..." : "Gerar link do Meet"}
+                  </button>
+                ) : (
+                  <a
+                    href={`/api/auth/google?returnTo=${encodeURIComponent("/")}`}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand py-3 text-[13px] font-bold text-card"
+                  >
                     <Link2 className="size-4" />
-                  )}
-                  {loading ? "Gerando..." : "Gerar link do Meet"}
-                </button>
+                    Conectar Google Meet
+                  </a>
+                )
               ) : (
                 <div className="space-y-2.5">
                   <div className="rounded-2xl border border-line bg-bg p-3">

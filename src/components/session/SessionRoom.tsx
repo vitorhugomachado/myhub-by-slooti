@@ -141,15 +141,28 @@ export function SessionRoom({
   useEffect(() => {
     setCanShare(typeof navigator !== "undefined" && "share" in navigator);
 
-    void Promise.all([
-      fetch(`/api/meet/create?appointmentId=${appointment.id}`).then((r) =>
-        r.json(),
-      ),
-      fetch("/api/auth/google/status").then((r) => r.json()),
-    ]).then(([meetRes, googleRes]) => {
-      if (meetRes.link) setMeet(meetRes.link);
-      setStatus(googleRes);
-    });
+    let cancelled = false;
+    void fetch(`/api/meet/create?appointmentId=${appointment.id}`)
+      .then((r) => r.json())
+      .then((meetRes) => {
+        if (!cancelled && meetRes.link) setMeet(meetRes.link);
+      })
+      .catch(() => {});
+
+    void fetch("/api/auth/google/status")
+      .then((r) => r.json())
+      .then((googleRes) => {
+        if (!cancelled) setStatus(googleRes);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStatus({ configured: true, connected: false });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [appointment.id]);
 
   const generateLink = useCallback(async () => {
@@ -387,11 +400,17 @@ export function SessionRoom({
                 </p>
               </div>
 
-              {status?.configured && !status.connected && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-line bg-bg p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[13px] text-muted">
-                    Conecte o Google uma vez para gerar links reais do Meet.
-                  </p>
+              {!status?.connected && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-orange/30 bg-orange/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[13px] font-semibold text-brand">
+                      Google Meet não conectado
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-muted">
+                      Vincule sua conta Google para gerar links reais das
+                      sessões.
+                    </p>
+                  </div>
                   <a
                     href={`/api/auth/google?returnTo=${encodeURIComponent(`/sessao/${appointment.id}`)}`}
                     className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand px-4 py-2.5 text-[13px] font-semibold text-card"
@@ -401,21 +420,33 @@ export function SessionRoom({
                 </div>
               )}
 
-              {!meet ? (
-                <button
-                  type="button"
-                  onClick={() => void generateLink()}
-                  disabled={loading}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-orange py-3.5 text-[14px] font-bold text-brand transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  {loading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Link2 className="size-4" />
-                  )}
-                  {loading ? "Gerando link..." : "Gerar link do Meet"}
-                </button>
+              {status?.connected ? (
+                !meet ? (
+                  <button
+                    type="button"
+                    onClick={() => void generateLink()}
+                    disabled={loading}
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-orange py-3.5 text-[14px] font-bold text-brand transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {loading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Link2 className="size-4" />
+                    )}
+                    {loading ? "Gerando link..." : "Gerar link do Meet"}
+                  </button>
+                ) : null
               ) : (
+                <a
+                  href={`/api/auth/google?returnTo=${encodeURIComponent(`/sessao/${appointment.id}`)}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-orange py-3.5 text-[14px] font-bold text-brand"
+                >
+                  <Link2 className="size-4" />
+                  Conectar Google e gerar Meet
+                </a>
+              )}
+
+              {meet ? (
                 <>
                   <div className="rounded-2xl border border-line bg-bg p-3.5">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
@@ -488,7 +519,7 @@ export function SessionRoom({
                     </button>
                   )}
                 </>
-              )}
+              ) : null}
 
               {error && (
                 <p className="rounded-2xl border border-danger/20 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">

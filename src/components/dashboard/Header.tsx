@@ -2,6 +2,7 @@
 
 import {
   ChevronDown,
+  Link2,
   LogOut,
   Settings,
   TrendingUp,
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { MegaNav } from "@/components/dashboard/MegaNav";
 import { PsychologistProfileForm } from "@/components/profile/PsychologistProfileForm";
@@ -22,12 +23,15 @@ import { profileDisplayName } from "@/lib/profile";
 
 export function Header() {
   const router = useRouter();
+  const pathname = usePathname();
   const { profile, update } = useProfile();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showFinance, setShowFinance] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState(false);
 
   const displayName = profileDisplayName(profile);
 
@@ -39,6 +43,13 @@ export function Header() {
     void fetchSessionUser().then((user) => {
       setShowFinance(hasFinanceAccess(user?.plan));
     });
+    void fetch("/api/auth/google/status")
+      .then((r) => r.json())
+      .then((data: { configured?: boolean; connected?: boolean }) => {
+        setGoogleConfigured(Boolean(data.configured));
+        setGoogleConnected(Boolean(data.connected));
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -171,12 +182,15 @@ export function Header() {
         </div>
       </header>
 
-      {settingsOpen && (
-        <SettingsDialog
-          onClose={() => setSettingsOpen(false)}
-          onOpenProfile={openProfile}
-        />
-      )}
+        {settingsOpen && (
+          <SettingsDialog
+            googleConfigured={googleConfigured}
+            googleConnected={googleConnected}
+            returnTo={pathname || "/"}
+            onClose={() => setSettingsOpen(false)}
+            onOpenProfile={openProfile}
+          />
+        )}
 
       {profileOpen && (
         <PsychologistProfileForm
@@ -192,9 +206,15 @@ export function Header() {
 function SettingsDialog({
   onClose,
   onOpenProfile,
+  googleConfigured,
+  googleConnected,
+  returnTo,
 }: {
   onClose: () => void;
   onOpenProfile: () => void;
+  googleConfigured: boolean;
+  googleConnected: boolean;
+  returnTo: string;
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -268,9 +288,45 @@ function SettingsDialog({
               </span>
             </span>
           </button>
-          <p className="text-[11px] leading-relaxed text-muted">
-            Preferências de notificação e integrações entram aqui em breve.
-          </p>
+
+          {googleConfigured ? (
+            googleConnected ? (
+              <div className="flex w-full items-center gap-3 rounded-2xl border border-line bg-bg p-3.5">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-surface text-brand">
+                  <Link2 className="size-4" />
+                </span>
+                <span>
+                  <span className="block text-[13px] font-semibold text-brand">
+                    Google Meet conectado
+                  </span>
+                  <span className="block text-[11px] text-muted">
+                    Links reais de reunião estão liberados
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <a
+                href={`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`}
+                className="flex w-full items-center gap-3 rounded-2xl border border-orange/30 bg-orange/10 p-3.5 text-left transition-colors hover:border-orange"
+              >
+                <span className="flex size-10 items-center justify-center rounded-xl bg-orange/20 text-brand">
+                  <Link2 className="size-4" />
+                </span>
+                <span>
+                  <span className="block text-[13px] font-semibold text-brand">
+                    Conectar Google Meet
+                  </span>
+                  <span className="block text-[11px] text-muted">
+                    Necessário para gerar links de sessão online
+                  </span>
+                </span>
+              </a>
+            )
+          ) : (
+            <div className="rounded-2xl border border-line bg-bg p-3.5 text-[12px] text-muted">
+              Google OAuth ainda não está configurado neste ambiente.
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end border-t border-line px-5 py-4">
