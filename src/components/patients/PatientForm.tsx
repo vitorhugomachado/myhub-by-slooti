@@ -789,11 +789,22 @@ export function PatientForm({
                             billingMode: opt.id as BillingMode,
                           };
                           if (opt.id === "pacote") {
+                            const size = next.packageSize.trim() || "4";
+                            next.packageSize = size;
+                            if (
+                              !next.creditsLeft.trim() ||
+                              Number(next.creditsLeft) <= 0
+                            ) {
+                              next.creditsLeft = size;
+                            }
+                            next.renewalDue = false;
                             const derived = sessionFromPackage(
                               next.packagePrice,
                               next.packageSize,
                             );
                             if (derived != null) next.sessionValue = derived;
+                          } else {
+                            next.renewalDue = false;
                           }
                           return next;
                         });

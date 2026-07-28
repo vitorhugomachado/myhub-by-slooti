@@ -101,7 +101,7 @@ export const emptyPatient = (): Omit<Patient, "id" | "createdAt" | "avatar"> => 
   paymentMethod: "Pix",
   billingMode: "avulso",
   packageSize: "4",
-  creditsLeft: "0",
+  creditsLeft: "4",
   packagePrice: "",
   renewalDue: false,
   lgpdConsent: false,
