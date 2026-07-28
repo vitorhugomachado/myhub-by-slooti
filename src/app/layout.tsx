@@ -10,8 +10,8 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "MyHub — Hub para Psicólogos",
-  description: "Hub principal para gestão de pacientes, sessões e agenda.",
+  title: "Neura — Hub para Psicólogos",
+  description: "Neura: gestão de pacientes, sessões e agenda para psicólogos.",
 };
 
 export default function RootLayout({

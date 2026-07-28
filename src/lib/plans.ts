@@ -36,7 +36,7 @@ export const PAYMENT_GATEWAYS: Array<{
   {
     id: "manual",
     name: "Controle manual",
-    description: "Registrar pagamentos no MyHub sem gateway.",
+    description: "Registrar pagamentos no Neura sem gateway.",
   },
 ];
 

@@ -2,9 +2,9 @@ import Link from "next/link";
 import { ArrowLeft, Shield } from "lucide-react";
 
 export const metadata = {
-  title: "Política de Privacidade e LGPD — MyHub",
+  title: "Política de Privacidade e LGPD — Neura",
   description:
-    "Como o MyHub trata dados pessoais e clínicos em conformidade com a LGPD.",
+    "Como a Neura trata dados pessoais e clínicos em conformidade com a LGPD.",
 };
 
 export default function PrivacidadePage() {
@@ -28,7 +28,7 @@ export default function PrivacidadePage() {
               Política de Privacidade e LGPD
             </h1>
             <p className="mt-1 text-[13px] text-muted">
-              MyHub by Slooti · Atualizado em julho de 2026
+              Neura by Slooti · Atualizado em julho de 2026
             </p>
           </div>
         </header>
@@ -37,7 +37,7 @@ export default function PrivacidadePage() {
           <section className="space-y-2">
             <h2 className="text-[16px] font-bold">1. Quem somos</h2>
             <p className="text-muted">
-              O MyHub é uma plataforma de gestão para profissionais de
+              A Neura é uma plataforma de gestão para profissionais de
               psicologia (agenda, pacientes, relatos de sessão e financeiro).
               Esta política explica como tratamos dados pessoais e informações
               clínicas, em linha com a Lei Geral de Proteção de Dados (LGPD —
@@ -75,7 +75,7 @@ export default function PrivacidadePage() {
               contrato / legítimo interesse operacional) e, no caso de dados
               sensíveis de saúde, com base no exercício regular de direitos e
               deveres do profissional de saúde, conforme a LGPD. Você é o
-              controlador dos dados dos seus pacientes; o MyHub atua como
+              controlador dos dados dos seus pacientes; a Neura atua como
               operador técnico da plataforma.
             </p>
           </section>
@@ -108,7 +108,7 @@ export default function PrivacidadePage() {
               Titulares podem solicitar confirmação de tratamento, acesso,
               correção, anonimização, portabilidade, eliminação e informação
               sobre compartilhamentos, nos termos da lei. Para exercer direitos
-              sobre dados da sua conta MyHub, entre em contato conosco. Para
+              sobre dados da sua conta Neura, entre em contato conosco. Para
               dados de pacientes, o canal principal é o profissional
               responsável pelo atendimento.
             </p>
@@ -118,7 +118,7 @@ export default function PrivacidadePage() {
             <h2 className="text-[16px] font-bold">7. Contato</h2>
             <p className="text-muted">
               Dúvidas sobre privacidade ou LGPD: use o e-mail de suporte da sua
-              conta MyHub / Slooti. Esta página pode ser atualizada; a data no
+              conta Neura / Slooti. Esta página pode ser atualizada; a data no
               topo indica a versão vigente.
             </p>
           </section>

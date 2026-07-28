@@ -48,7 +48,7 @@ export async function PUT(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Plano Pro é liberado por convite. Informe o código ou fale com o suporte MyHub.",
+            "Plano Pro é liberado por convite. Informe o código ou fale com o suporte Neura.",
         },
         { status: 403 },
       );

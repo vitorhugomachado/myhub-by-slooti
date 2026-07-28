@@ -86,7 +86,7 @@ export function Header() {
             <TrendingUp className="size-[18px]" strokeWidth={2.5} />
           </div>
           <span className="text-base font-bold tracking-tight text-brand">
-            MyHub
+            Neura
           </span>
         </Link>
 
@@ -238,7 +238,7 @@ function SettingsDialog({
               Configurações
             </h2>
             <p className="mt-0.5 text-[12px] text-muted">
-              Preferências do MyHub
+              Preferências do Neura
             </p>
           </div>
           <button

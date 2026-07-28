@@ -185,7 +185,7 @@ export function SessionRoom({
   }, [appointment.id]);
 
   const shareText = meet
-    ? `Olá, ${dated.patient}! Segue o link da nossa sessão de hoje (${appointment.start}):\n${meet.meetingUri}\n\nAté já — MyHub`
+    ? `Olá, ${dated.patient}! Segue o link da nossa sessão de hoje (${appointment.start}):\n${meet.meetingUri}\n\nAté já — Neura`
     : "";
 
   async function copyLink() {

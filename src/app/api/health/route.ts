@@ -6,7 +6,7 @@ export async function GET() {
     await prisma.$queryRaw`SELECT 1`;
     return NextResponse.json({
       ok: true,
-      service: "myhub",
+      service: "neura",
       time: new Date().toISOString(),
     });
   } catch (error) {
@@ -14,7 +14,7 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-        service: "myhub",
+        service: "neura",
         error: "database_unavailable",
         time: new Date().toISOString(),
       },

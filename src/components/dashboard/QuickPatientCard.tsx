@@ -168,7 +168,7 @@ export function QuickPatientCard({
   }, [dated.id]);
 
   const shareText = meet
-    ? `Olá, ${dated.patient}! Segue o link da nossa sessão (${dated.start}):\n${meet.meetingUri}\n\nAté já — MyHub`
+    ? `Olá, ${dated.patient}! Segue o link da nossa sessão (${dated.start}):\n${meet.meetingUri}\n\nAté já — Neura`
     : "";
 
   const whatsappHref = phoneTel

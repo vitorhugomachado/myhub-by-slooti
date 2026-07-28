@@ -146,7 +146,7 @@ function OnboardingInner() {
           </div>
           <div>
             <p className="text-lg font-extrabold tracking-tight text-brand">
-              MyHub
+              Neura
             </p>
             <p className="text-[12px] text-muted">
               Olá{user?.name ? `, ${user.name.split(" ")[0]}` : ""} — escolha
@@ -261,7 +261,7 @@ function OnboardingInner() {
               </h1>
               <p className="mt-1 text-[13px] text-muted">
                 O Pro ainda não tem cobrança automática. Use o código que você
-                recebeu da equipe MyHub.
+                recebeu da equipe Neura.
               </p>
             </div>
             <div className="space-y-4 p-6">

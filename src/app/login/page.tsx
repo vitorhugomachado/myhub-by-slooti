@@ -123,7 +123,7 @@ function LoginForm() {
               <TrendingUp className="size-6" strokeWidth={2.5} />
             </div>
             <p className="text-2xl font-extrabold tracking-tight text-brand sm:text-3xl">
-              MyHub
+              Neura
             </p>
           </div>
           <h1 className="mt-6 max-w-md text-3xl font-extrabold leading-tight tracking-tight text-brand sm:text-4xl">
@@ -303,7 +303,7 @@ function LoginForm() {
           </div>
 
           <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
-            Ao continuar, você concorda com o uso do MyHub.{" "}
+            Ao continuar, você concorda com o uso do Neura.{" "}
             <Link
               href="/privacidade"
               className="font-semibold text-brand underline-offset-2 hover:underline"
