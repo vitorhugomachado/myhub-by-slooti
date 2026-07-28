@@ -61,8 +61,7 @@ export function FinishSessionFlow({
     const skipPayment =
       !financeOk ||
       (patient.billingMode === "pacote" &&
-        Number(patient.creditsLeft || 0) > 0 &&
-        !patient.renewalDue);
+        Number(patient.creditsLeft || 0) > 0);
 
     if (financeOk) {
       billSession(dated);

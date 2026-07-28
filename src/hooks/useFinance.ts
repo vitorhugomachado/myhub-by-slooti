@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { findPatientByName } from "@/lib/billing";
+import { findPatientByName, needsPackageRenewal } from "@/lib/billing";
 import type { DatedAppointment } from "@/lib/agenda";
 import {
   applyChargeDeleteSideEffects,
@@ -268,11 +268,7 @@ export function useFinance() {
     [patients],
   );
 
-  const renewalCount = patients.filter(
-    (p) =>
-      p.billingMode === "pacote" &&
-      (p.renewalDue || Number(p.creditsLeft) <= 0),
-  ).length;
+  const renewalCount = patients.filter((p) => needsPackageRenewal(p)).length;
 
   return {
     entries,

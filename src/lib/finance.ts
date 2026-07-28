@@ -272,7 +272,7 @@ export function showsFinanceMoneyIcon(
 
   if (!entry) {
     const credits = Number(patient?.creditsLeft || 0);
-    return Boolean(patient?.renewalDue) || credits <= 1;
+    return credits <= 0;
   }
 
   if (entry.kind === "consumo_pacote") {
@@ -406,12 +406,12 @@ export function applySessionBilling(
   const method = methodFromPatient(patient?.paymentMethod ?? "Pix");
   const mode: BillingMode = patient?.billingMode ?? "avulso";
   const credits = Number(patient?.creditsLeft || 0);
-  const renewalDue = Boolean(patient?.renewalDue);
 
   let nextPatient = patient;
   let charge: FinanceCharge;
 
-  if (mode === "pacote" && credits > 0 && !renewalDue) {
+  // Enquanto houver crédito, consome — ignora renewalDue “preso”
+  if (mode === "pacote" && credits > 0) {
     const left = credits - 1;
     charge = {
       id: `f-appt-${appointment.id}`,
@@ -433,7 +433,7 @@ export function applySessionBilling(
         renewalDue: left <= 0,
       };
     }
-  } else if (mode === "pacote" && (credits <= 0 || renewalDue)) {
+  } else if (mode === "pacote") {
     const packagePrice = parseMoney(
       patient?.packagePrice || String(sessionValue * Number(patient?.packageSize || 4)),
     );

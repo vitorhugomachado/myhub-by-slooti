@@ -880,7 +880,22 @@ export function PatientForm({
                         err("creditsLeft") ? inputErrorClass : inputClass
                       }
                       value={form.creditsLeft}
-                      onChange={(e) => set("creditsLeft", e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setForm((prev) => {
+                          const credits = Number(value);
+                          const hasCredits =
+                            Number.isFinite(credits) && credits > 0;
+                          return {
+                            ...prev,
+                            creditsLeft: value,
+                            renewalDue:
+                              prev.billingMode === "pacote"
+                                ? !hasCredits
+                                : false,
+                          };
+                        });
+                      }}
                       placeholder="4"
                       inputMode="numeric"
                     />
@@ -889,7 +904,19 @@ export function PatientForm({
                     <input
                       type="checkbox"
                       checked={form.renewalDue}
-                      onChange={(e) => set("renewalDue", e.target.checked)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setForm((prev) => ({
+                          ...prev,
+                          renewalDue: checked,
+                          // Marcar renovar zera créditos; desmarcar com 0 mantém aviso
+                          creditsLeft: checked
+                            ? "0"
+                            : Number(prev.creditsLeft) > 0
+                              ? prev.creditsLeft
+                              : prev.packageSize || "4",
+                        }));
+                      }}
                       className="mt-0.5 size-4 rounded border-line"
                     />
                     <span>

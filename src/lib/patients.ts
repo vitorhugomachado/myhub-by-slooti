@@ -319,6 +319,15 @@ export function normalizePatient(
   p: Partial<Patient> & Pick<Patient, "id" | "fullName">,
 ): Patient {
   const base = emptyPatient();
+  const creditsRaw = p.creditsLeft ?? "0";
+  const credits = Number(creditsRaw);
+  const creditsLeft = Number.isFinite(credits)
+    ? String(Math.max(0, credits))
+    : "0";
+  const billingMode = p.billingMode ?? "avulso";
+  const renewalDue =
+    billingMode === "pacote" ? Number(creditsLeft) <= 0 : false;
+
   return {
     ...base,
     ...p,
@@ -326,11 +335,11 @@ export function normalizePatient(
     fullName: p.fullName,
     avatar: p.avatar || DEFAULT_AVATAR,
     createdAt: p.createdAt ?? new Date().toISOString().slice(0, 10),
-    billingMode: p.billingMode ?? "avulso",
+    billingMode,
     packageSize: p.packageSize ?? "4",
-    creditsLeft: p.creditsLeft ?? "0",
+    creditsLeft,
     packagePrice: p.packagePrice ?? "",
-    renewalDue: Boolean(p.renewalDue),
+    renewalDue,
   };
 }
 

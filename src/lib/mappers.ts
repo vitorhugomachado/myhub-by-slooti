@@ -52,7 +52,10 @@ export function toPatient(p: DbPatient): Patient {
     packageSize: p.packageSize,
     creditsLeft: p.creditsLeft,
     packagePrice: p.packagePrice,
-    renewalDue: p.renewalDue,
+    renewalDue:
+      p.billingMode === "pacote"
+        ? Number(p.creditsLeft || 0) <= 0
+        : false,
     lgpdConsent: p.lgpdConsent,
     notes: p.notes,
     startedAt: p.startedAt,
