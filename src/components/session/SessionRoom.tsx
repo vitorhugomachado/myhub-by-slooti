@@ -25,16 +25,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
+import { useSessionReports } from "@/hooks/useSessionReports";
 import {
-  AGENDA_TODAY,
+  agendaToday,
   getAppointmentDate,
   type DatedAppointment,
 } from "@/lib/agenda";
+import { formatFinanceDate } from "@/lib/finance";
 import {
   formatDateBr,
   formatPatientSince,
 } from "@/lib/patients";
 import type { Appointment } from "@/lib/mock-data";
+import type { ScheduleItem } from "@/lib/schedule";
 
 type MeetLink = {
   meetingUri: string;
@@ -60,9 +63,14 @@ function phoneDigits(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
-export function SessionRoom({ appointment }: { appointment: Appointment }) {
+export function SessionRoom({
+  appointment,
+}: {
+  appointment: Appointment | ScheduleItem;
+}) {
   const { patientByName } = useFinance();
   const { items } = useSchedule();
+  const { reports } = useSessionReports({ patientName: appointment.patient });
   const [tab, setTab] = useState<TabId>("sessao");
   const [meet, setMeet] = useState<MeetLink | null>(null);
   const [status, setStatus] = useState<GoogleStatus | null>(null);
@@ -75,11 +83,36 @@ export function SessionRoom({ appointment }: { appointment: Appointment }) {
   const dated = useMemo<DatedAppointment>(() => {
     const live = items.find((a) => a.id === appointment.id);
     if (live) return live;
-    const date = getAppointmentDate(appointment.id) ?? AGENDA_TODAY;
+    const withDate = appointment as ScheduleItem;
+    const date =
+      withDate.date ||
+      getAppointmentDate(appointment.id) ||
+      agendaToday();
     return { ...appointment, date };
   }, [appointment, items]);
 
-  const patient = patientByName(dated.patient);
+  const patient = useMemo(
+    () => patientByName(dated.patient),
+    [dated.patient, patientByName],
+  );
+
+  const history = useMemo(() => {
+    const name = dated.patient.toLowerCase();
+    const id = dated.patientId;
+    return items
+      .filter(
+        (a) =>
+          a.status !== "cancelled" &&
+          (id
+            ? a.patientId === id || a.patient.toLowerCase() === name
+            : a.patient.toLowerCase() === name),
+      )
+      .sort((a, b) => {
+        const byDate = b.date.localeCompare(a.date);
+        if (byDate !== 0) return byDate;
+        return b.start.localeCompare(a.start);
+      });
+  }, [items, dated.patient, dated.patientId]);
   const displayName =
     patient?.socialName || patient?.fullName || dated.patient;
   const email = patient?.email || "—";
@@ -466,19 +499,126 @@ export function SessionRoom({ appointment }: { appointment: Appointment }) {
           )}
 
           {tab === "prontuarios" && (
-            <ComingSoon
-              icon={FileText}
-              title="Prontuários"
-              description="Aqui você vai registrar evoluções, anexos e anotações clínicas do paciente. Este módulo será criado em seguida."
-            />
+            <article className="card flex flex-1 flex-col gap-4 p-5 sm:p-6">
+              <div>
+                <h2 className="text-[15px] font-bold tracking-tight text-brand">
+                  Relatos e prontuário
+                </h2>
+                <p className="mt-1 text-[13px] text-muted">
+                  Evoluções salvas deste paciente
+                </p>
+              </div>
+              <Link
+                href={`/prontuario/novo?appointmentId=${dated.id}&patient=${encodeURIComponent(dated.patient)}`}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface py-3 text-[13px] font-bold text-brand"
+              >
+                <FileText className="size-4" />
+                Novo relato da sessão
+              </Link>
+              {patient ? (
+                <div className="rounded-2xl border border-line bg-bg p-3 text-[12px] text-muted">
+                  <p>
+                    <span className="font-semibold text-brand">Queixa: </span>
+                    {patient.chiefComplaint.trim() || "—"}
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-semibold text-brand">
+                      Diagnóstico:{" "}
+                    </span>
+                    {patient.diagnosis.trim() || "—"}
+                  </p>
+                  <Link
+                    href={`/pacientes?id=${encodeURIComponent(patient.id)}`}
+                    className="mt-2 inline-block text-[12px] font-semibold text-brand hover:underline"
+                  >
+                    Abrir ficha clínica
+                  </Link>
+                </div>
+              ) : null}
+              {reports.length === 0 ? (
+                <p className="py-6 text-center text-[13px] text-muted">
+                  Nenhum relato salvo para este paciente.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {reports.map((r) => (
+                    <li
+                      key={r.id}
+                      className="rounded-2xl border border-line bg-bg p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[13px] font-semibold text-brand">
+                          {formatFinanceDate(r.date)}
+                          {r.start ? ` · ${r.start}` : ""}
+                        </p>
+                        <Link
+                          href={`/prontuario/novo?appointmentId=${r.appointmentId}&patient=${encodeURIComponent(r.patientName)}`}
+                          className="text-[11px] font-semibold text-muted hover:text-brand"
+                        >
+                          Abrir
+                        </Link>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[12px] text-muted">
+                        {r.summary}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
           )}
 
           {tab === "historico" && (
-            <ComingSoon
-              icon={History}
-              title="Registro de sessões"
-              description="Histórico completo de atendimentos, duração, modalidade e resumos. Em breve você poderá consultar e filtrar tudo por aqui."
-            />
+            <article className="card flex flex-1 flex-col gap-4 p-5 sm:p-6">
+              <div>
+                <h2 className="text-[15px] font-bold tracking-tight text-brand">
+                  Registro de sessões
+                </h2>
+                <p className="mt-1 text-[13px] text-muted">
+                  Histórico de atendimentos deste paciente
+                </p>
+              </div>
+              {history.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-muted">
+                  Nenhuma sessão registrada.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {history.map((h) => (
+                    <li key={`${h.date}-${h.id}`}>
+                      <Link
+                        href={`/sessao/${h.id}`}
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-bg p-3 transition-colors hover:border-surface hover:bg-surface-soft/50"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-brand">
+                            {formatFinanceDate(h.date)} · {h.start} – {h.end}
+                          </p>
+                          <p className="truncate text-[11px] text-muted">
+                            {h.type} · {h.mode}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            h.status === "done"
+                              ? "bg-surface text-brand"
+                              : h.status === "now"
+                                ? "bg-orange text-brand"
+                                : "bg-yellow/30 text-brand"
+                          }`}
+                        >
+                          {h.status === "done"
+                            ? "Concluída"
+                            : h.status === "now"
+                              ? "Agora"
+                              : "Próxima"}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
           )}
 
           {tab === "pagamento" && (
@@ -500,27 +640,3 @@ export function SessionRoom({ appointment }: { appointment: Appointment }) {
   );
 }
 
-function ComingSoon({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: typeof FileText;
-  title: string;
-  description: string;
-}) {
-  return (
-    <article className="card flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span className="flex size-14 items-center justify-center rounded-2xl bg-surface-soft text-brand">
-        <Icon className="size-6" />
-      </span>
-      <h2 className="text-lg font-bold tracking-tight text-brand">{title}</h2>
-      <p className="max-w-md text-[13px] leading-relaxed text-muted">
-        {description}
-      </p>
-      <span className="mt-2 rounded-full bg-bg px-3 py-1 text-[11px] font-semibold text-muted">
-        Em breve
-      </span>
-    </article>
-  );
-}

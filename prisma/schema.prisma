@@ -85,7 +85,8 @@ model Patient {
   createdAt         String   @default("")
   updatedAt         DateTime @updatedAt
 
-  charges FinanceCharge[]
+  charges      FinanceCharge[]
+  appointments Appointment[]
 
   @@index([userId])
   @@index([userId, fullName])
@@ -123,6 +124,8 @@ model Appointment {
   start         String
   end           String
   patient       String
+  patientId     String?
+  patientRecord Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
   type          String
   mode          String
   status        String   @default("upcoming")
@@ -135,6 +138,7 @@ model Appointment {
 
   @@index([userId])
   @@index([userId, date])
+  @@index([userId, patientId])
 }
 
 model Pendency {

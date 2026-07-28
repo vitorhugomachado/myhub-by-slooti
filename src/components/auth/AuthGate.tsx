@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { AUTH_EVENT, fetchSessionUser, getCachedUser } from "@/lib/auth";
 import { needsPlanOnboarding, postAuthPath } from "@/lib/plans";
 
-const PUBLIC_PREFIXES = ["/login", "/auth"];
+const PUBLIC_PREFIXES = ["/login", "/auth", "/privacidade"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PREFIXES.some(

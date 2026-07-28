@@ -40,6 +40,7 @@ export type AddAppointmentInput = {
   start: string;
   end?: string;
   patient: string;
+  patientId?: string;
   avatar: string;
   type?: string;
   mode: Appointment["mode"];
@@ -182,6 +183,7 @@ export function addAppointment(
     start: input.start,
     end,
     patient: input.patient,
+    patientId: input.patientId,
     avatar: input.avatar,
     type: input.type?.trim() || "Sessão",
     mode: input.mode,

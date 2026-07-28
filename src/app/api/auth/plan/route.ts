@@ -8,6 +8,13 @@ import {
 } from "@/lib/plans";
 import { getSessionUser, toPublicUser } from "@/lib/session";
 
+function inviteCodeOk(code: string | undefined) {
+  const expected = process.env.PRO_INVITE_CODE?.trim();
+  if (!expected) return false;
+  const provided = code?.trim();
+  return Boolean(provided) && provided === expected;
+}
+
 export async function PUT(request: Request) {
   const session = await getSessionUser();
   if (!session) {
@@ -17,6 +24,7 @@ export async function PUT(request: Request) {
   const body = (await request.json()) as {
     plan?: string;
     paymentGateway?: string;
+    inviteCode?: string;
   };
 
   if (!isPlanId(body.plan)) {
@@ -30,13 +38,32 @@ export async function PUT(request: Request) {
   let paymentGateway = "";
 
   if (plan === "pro") {
+    const alreadyPro = session.plan === "pro";
+    const onlyGateway =
+      alreadyPro &&
+      body.paymentGateway &&
+      (!body.inviteCode || inviteCodeOk(body.inviteCode));
+
+    if (!alreadyPro && !inviteCodeOk(body.inviteCode)) {
+      return NextResponse.json(
+        {
+          error:
+            "Plano Pro é liberado por convite. Informe o código ou fale com o suporte MyHub.",
+        },
+        { status: 403 },
+      );
+    }
+
     if (body.paymentGateway && !isPaymentGateway(body.paymentGateway)) {
       return NextResponse.json(
         { error: "Gateway de pagamento inválido." },
         { status: 400 },
       );
     }
-    paymentGateway = (body.paymentGateway as PaymentGateway | undefined) ?? "";
+    paymentGateway =
+      (body.paymentGateway as PaymentGateway | undefined) ??
+      (onlyGateway ? session.paymentGateway : "") ??
+      "";
   }
 
   const user = await prisma.user.update({

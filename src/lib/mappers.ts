@@ -199,6 +199,7 @@ export function toAppointment(a: {
   start: string;
   end: string;
   patient: string;
+  patientId?: string | null;
   type: string;
   mode: string;
   status: string;
@@ -217,6 +218,7 @@ export function toAppointment(a: {
     start: a.start,
     end: a.end,
     patient: a.patient,
+    patientId: a.patientId || undefined,
     type: a.type,
     mode: a.mode as ScheduleItem["mode"],
     status: a.status as ScheduleItem["status"],

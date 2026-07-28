@@ -1,6 +1,7 @@
 "use client";
 
 import { Eye, EyeOff, Loader2, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
@@ -301,9 +302,15 @@ function LoginForm() {
             </div>
           </div>
 
-          <p className="mt-4 text-center text-[11px] text-muted">
-            Ao continuar, você concorda com o uso do MyHub no seu navegador.
-            Dados ficam salvos localmente nesta demo.
+          <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
+            Ao continuar, você concorda com o uso do MyHub.{" "}
+            <Link
+              href="/privacidade"
+              className="font-semibold text-brand underline-offset-2 hover:underline"
+            >
+              Política de Privacidade e LGPD
+            </Link>
+            .
           </p>
         </section>
       </div>

@@ -1,13 +1,13 @@
 "use client";
 
-import { CreditCard, FileText, Pill, X } from "lucide-react";
+import { CreditCard, FileText, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
 import { useFinance } from "@/hooks/useFinance";
 import { usePendencies } from "@/hooks/usePendencies";
 import { getCachedUser } from "@/lib/auth";
-import { AGENDA_TODAY, getAppointmentDate } from "@/lib/agenda";
+import { agendaToday, getAppointmentDate } from "@/lib/agenda";
 import { findPatientByName, needsPackageRenewal } from "@/lib/billing";
 import type { Appointment } from "@/lib/mock-data";
 import { pendencyLabel, type PendencyType } from "@/lib/pendencies";
@@ -33,9 +33,8 @@ export function FinishSessionFlow({
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>("confirm");
   const [prontuario, setProntuario] = useState<Choice>(null);
-  const [receita, setReceita] = useState<Choice>(null);
 
-  const date = getAppointmentDate(appointment.id) ?? AGENDA_TODAY;
+  const date = getAppointmentDate(appointment.id) ?? agendaToday();
   const dated = { ...appointment, date };
 
   useEffect(() => {
@@ -73,15 +72,15 @@ export function FinishSessionFlow({
   }
 
   function choose(type: PendencyType, choice: "now" | "later") {
-    if (type === "prontuario") setProntuario(choice);
-    else setReceita(choice);
+    if (type !== "prontuario") return;
+    setProntuario(choice);
 
     if (choice === "later") {
       const patient = patientByName(appointment.patient);
       void addPendency({
         type,
         patientName: appointment.patient,
-        patientId: patient?.id,
+        patientId: patient?.id ?? appointment.patientId,
         appointmentId: appointment.id,
       });
     }
@@ -89,24 +88,14 @@ export function FinishSessionFlow({
 
   function finishFollowup() {
     const goProntuario = prontuario === "now";
-    const goReceita = receita === "now";
-
     handleClose();
-
     if (goProntuario) {
       router.push(
         `/prontuario/novo?appointmentId=${appointment.id}&patient=${encodeURIComponent(appointment.patient)}`,
       );
-      return;
-    }
-    if (goReceita) {
-      router.push(
-        `/receita-saude/nova?appointmentId=${appointment.id}&patient=${encodeURIComponent(appointment.patient)}`,
-      );
     }
   }
 
-  const bothChosen = prontuario !== null && receita !== null;
   const isSettled = paid(appointment.id, {
     date,
     patientName: appointment.patient,
@@ -207,8 +196,8 @@ export function FinishSessionFlow({
           {step === "followup" && (
             <>
               <p className="text-[13px] leading-relaxed text-muted">
-                Escolha o que deseja fazer agora. Se deixar para depois, vamos
-                criar lembretes e marcar como pendência no cadastro do paciente.
+                Deseja registrar o relato da sessão agora? Se deixar para
+                depois, criamos um lembrete nas pendências.
               </p>
 
               <TaskChoice
@@ -219,17 +208,9 @@ export function FinishSessionFlow({
                 onLater={() => choose("prontuario", "later")}
               />
 
-              <TaskChoice
-                icon={Pill}
-                title={pendencyLabel("receita")}
-                choice={receita}
-                onNow={() => choose("receita", "now")}
-                onLater={() => choose("receita", "later")}
-              />
-
               <button
                 type="button"
-                disabled={!bothChosen}
+                disabled={prontuario === null}
                 onClick={finishFollowup}
                 className="w-full rounded-full bg-orange py-3 text-[13px] font-bold text-brand disabled:cursor-not-allowed disabled:opacity-50"
               >

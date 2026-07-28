@@ -186,6 +186,7 @@ export function AddAppointmentDialog({
         start,
         end,
         patient: selectedPatient.fullName,
+        patientId: selectedPatient.id,
         avatar: selectedPatient.avatar || DEFAULT_AVATAR,
         type: type.trim() || selectedPatient.chiefComplaint || "Sessão",
         mode,

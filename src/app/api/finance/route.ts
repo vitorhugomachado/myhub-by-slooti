@@ -68,25 +68,55 @@ export async function PUT(request: Request) {
     }
   }
 
+  const incomingIds = entries.map((e) => e.id).filter(Boolean);
+
+  if (incomingIds.length) {
+    const foreignCharge = await prisma.financeCharge.findFirst({
+      where: { id: { in: incomingIds }, NOT: { userId: user.id } },
+      select: { id: true },
+    });
+    if (foreignCharge) {
+      return NextResponse.json(
+        {
+          error: "invalid_charge",
+          message: "Lançamento não pertence à sua conta.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
-    await tx.financeCharge.deleteMany({ where: { userId: user.id } });
-    if (entries.length) {
-      await tx.financeCharge.createMany({
-        data: entries.map((e) => ({
+    await tx.financeCharge.deleteMany({
+      where: {
+        userId: user.id,
+        ...(incomingIds.length ? { id: { notIn: incomingIds } } : {}),
+      },
+    });
+
+    for (const e of entries) {
+      const data = {
+        patientId: e.patientId ?? null,
+        patientName: e.patientName,
+        appointmentId: e.appointmentId ?? null,
+        date: e.date,
+        description: e.description,
+        amount: e.amount,
+        method: e.method,
+        status: e.status,
+        kind: e.kind,
+        note: e.note ?? "",
+        isPackageLastSession: Boolean(e.isPackageLastSession),
+      };
+
+      await tx.financeCharge.upsert({
+        where: { id: e.id },
+        create: {
           id: e.id,
           userId: user.id,
-          patientId: e.patientId ?? null,
-          patientName: e.patientName,
-          appointmentId: e.appointmentId ?? null,
-          date: e.date,
-          description: e.description,
-          amount: e.amount,
-          method: e.method,
-          status: e.status,
-          kind: e.kind,
-          note: e.note ?? "",
-          isPackageLastSession: Boolean(e.isPackageLastSession),
-        })),
+          ...data,
+        },
+        update: data,
       });
     }
   });

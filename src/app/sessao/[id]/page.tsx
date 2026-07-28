@@ -1,17 +1,31 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { SessionRoom } from "@/components/session/SessionRoom";
-import { getAppointmentById } from "@/lib/mock-data";
+import { prisma } from "@/lib/db";
+import { toAppointment } from "@/lib/mappers";
+import { getSessionUser } from "@/lib/session";
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
 
 export default async function SessaoPage({ params }: PageProps) {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const { id } = await params;
   const appointmentId = Number(id);
-  const appointment = getAppointmentById(appointmentId);
+  if (!Number.isFinite(appointmentId) || appointmentId <= 0) {
+    notFound();
+  }
 
-  if (!appointment) notFound();
+  const row = await prisma.appointment.findFirst({
+    where: { id: appointmentId, userId: user.id },
+  });
+  if (!row) {
+    notFound();
+  }
 
-  return <SessionRoom appointment={appointment} />;
+  return <SessionRoom appointment={toAppointment(row)} />;
 }

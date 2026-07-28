@@ -4,15 +4,27 @@ import { ClipboardList, FilePlus2, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
+import { Avatar } from "@/components/shared/Avatar";
+import { usePatients } from "@/hooks/usePatients";
 import { usePendencies } from "@/hooks/usePendencies";
 import { useSessionReports } from "@/hooks/useSessionReports";
+import { DEFAULT_AVATAR, resolveAvatar } from "@/lib/avatar";
 import { formatFinanceDate } from "@/lib/finance";
 import { pendencyHref } from "@/lib/pendencies";
 
 export function RelatosPage() {
   const [query, setQuery] = useState("");
   const { reports, hydrated } = useSessionReports();
+  const { patients } = usePatients();
   const { pendencies } = usePendencies();
+
+  const patientByName = useMemo(() => {
+    const map = new Map<string, (typeof patients)[number]>();
+    for (const p of patients) {
+      map.set(p.fullName.trim().toLowerCase(), p);
+    }
+    return map;
+  }, [patients]);
 
   const pendingProntuarios = useMemo(
     () =>
@@ -34,7 +46,8 @@ export function RelatosPage() {
       (r) =>
         r.patientName.toLowerCase().includes(q) ||
         r.summary.toLowerCase().includes(q) ||
-        r.evolution.toLowerCase().includes(q),
+        r.evolution.toLowerCase().includes(q) ||
+        r.nextSteps.toLowerCase().includes(q),
     );
   }, [reports, query]);
 
@@ -76,31 +89,50 @@ export function RelatosPage() {
         </div>
 
         {pendingProntuarios.length > 0 && (
-          <section className="card p-5">
+          <section>
             <h2 className="mb-3 text-[15px] font-bold text-brand">
               Pendentes ({pendingProntuarios.length})
             </h2>
-            <ul className="flex flex-col gap-2">
-              {pendingProntuarios.map((item) => (
-                <li key={item.id}>
-                  <Link
-                    href={pendencyHref(item)}
-                    className="inner flex items-center justify-between gap-3 p-3 transition-colors hover:border-surface hover:bg-surface-soft/70"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold text-brand">
-                        {item.patientName}
-                      </p>
-                      <p className="text-[11px] text-muted">
-                        Relato pendente após a sessão
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-orange/20 px-2.5 py-1 text-[10px] font-bold text-brand">
-                      Pendente
-                    </span>
-                  </Link>
-                </li>
-              ))}
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {pendingProntuarios.map((item) => {
+                const patient = patientByName.get(
+                  item.patientName.trim().toLowerCase(),
+                );
+                return (
+                  <li key={item.id}>
+                    <Link
+                      href={pendencyHref(item)}
+                      className="card flex h-full flex-col gap-3 p-4 transition-colors hover:border-surface hover:bg-surface-soft/40"
+                    >
+                      <div className="flex items-start gap-3">
+                        <Avatar
+                          src={resolveAvatar(patient?.avatar || DEFAULT_AVATAR)}
+                          alt={item.patientName}
+                          size={48}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-[14px] font-semibold text-brand">
+                              {item.patientName}
+                            </p>
+                            <span className="rounded-full bg-orange/20 px-2 py-0.5 text-[10px] font-bold text-brand">
+                              Pendente
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[12px] text-muted">
+                            Relato pendente após a sessão
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-auto flex items-center border-t border-line pt-3">
+                        <span className="ml-auto text-[12px] font-semibold text-brand">
+                          Preencher agora
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -124,39 +156,76 @@ export function RelatosPage() {
             </p>
           </article>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {filtered.map((r) => (
-              <li key={r.id}>
-                <Link
-                  href={`/prontuario/novo?appointmentId=${r.appointmentId}&patient=${encodeURIComponent(r.patientName)}`}
-                  className="card flex flex-col gap-2 p-4 transition-colors hover:border-surface hover:bg-surface-soft/40 sm:flex-row sm:items-start sm:justify-between"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[14px] font-semibold text-brand">
-                        {r.patientName}
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {filtered.map((r) => {
+              const patient = patientByName.get(
+                r.patientName.trim().toLowerCase(),
+              );
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/prontuario/novo?appointmentId=${r.appointmentId}&patient=${encodeURIComponent(r.patientName)}`}
+                    className="card flex h-full flex-col gap-3 p-4 transition-colors hover:border-surface hover:bg-surface-soft/40"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Avatar
+                        src={resolveAvatar(patient?.avatar || DEFAULT_AVATAR)}
+                        alt={r.patientName}
+                        size={48}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-[14px] font-semibold text-brand">
+                            {r.patientName}
+                          </p>
+                          <span className="rounded-full bg-bg px-2 py-0.5 text-[10px] font-semibold text-muted">
+                            {formatFinanceDate(r.date)}
+                            {r.start ? ` · ${r.start}` : ""}
+                            {r.end ? `–${r.end}` : ""}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[12px] text-muted">
+                          {patient?.approach || "Relato de sessão"}
+                          {patient?.preferredMode
+                            ? ` · ${patient.preferredMode}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 text-[12px]">
+                      <p className="line-clamp-2 text-muted">
+                        <span className="font-semibold text-brand">
+                          Resumo:{" "}
+                        </span>
+                        {r.summary.trim() || "—"}
                       </p>
-                      <span className="rounded-full bg-bg px-2 py-0.5 text-[10px] font-semibold text-muted">
-                        {formatFinanceDate(r.date)}
-                        {r.start ? ` · ${r.start}` : ""}
-                        {r.end ? `–${r.end}` : ""}
+                      <p className="line-clamp-2 text-muted">
+                        <span className="font-semibold text-brand">
+                          Evolução:{" "}
+                        </span>
+                        {r.evolution.trim() || "—"}
+                      </p>
+                    </div>
+
+                    <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                      {r.nextSteps.trim() ? (
+                        <span className="rounded-full bg-surface-soft px-2.5 py-1 text-[10px] font-bold text-brand">
+                          Com próximos passos
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-bg px-2.5 py-1 text-[10px] font-semibold text-muted">
+                          Sem próximos passos
+                        </span>
+                      )}
+                      <span className="ml-auto text-[12px] font-semibold text-brand">
+                        Abrir
                       </span>
                     </div>
-                    <p className="mt-1.5 line-clamp-2 text-[13px] text-muted">
-                      {r.summary || "Sem resumo"}
-                    </p>
-                    {r.evolution ? (
-                      <p className="mt-1 line-clamp-1 text-[12px] text-muted">
-                        Evolução: {r.evolution}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-[12px] font-semibold text-brand">
-                    Abrir
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

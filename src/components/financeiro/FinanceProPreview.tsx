@@ -46,14 +46,22 @@ const PRO_BENEFITS = [
 
 export function FinanceProPreview() {
   const router = useRouter();
+  const [inviteCode, setInviteCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function hirePro() {
+  async function unlockPro() {
+    if (!inviteCode.trim()) {
+      setError("Informe o código de convite.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      const result = await choosePlan({ plan: "pro" });
+      const result = await choosePlan({
+        plan: "pro",
+        inviteCode: inviteCode.trim(),
+      });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -172,14 +180,29 @@ export function FinanceProPreview() {
             <p className="mt-2 text-[12px] text-danger">{error}</p>
           ) : null}
 
+          <label className="mt-3 block">
+            <span className="mb-1 block text-[11px] font-semibold text-brand">
+              Código de convite Pro
+            </span>
+            <input
+              value={inviteCode}
+              onChange={(e) => {
+                setInviteCode(e.target.value);
+                setError("");
+              }}
+              placeholder="Cole o convite"
+              className="w-full rounded-full border border-line bg-bg px-4 py-2.5 text-[13px] text-brand outline-none focus:border-surface"
+            />
+          </label>
+
           <button
             type="button"
             disabled={loading}
-            onClick={() => void hirePro()}
-            className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-[13px] font-bold text-card transition-opacity disabled:opacity-60"
+            onClick={() => void unlockPro()}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-[13px] font-bold text-card transition-opacity disabled:opacity-60"
           >
             <Sparkles className="size-4" />
-            {loading ? "Abrindo Pro…" : "Contratar plano Pro"}
+            {loading ? "Liberando…" : "Desbloquear Pro com convite"}
           </button>
         </div>
       </div>

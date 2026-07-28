@@ -22,7 +22,7 @@ import {
   type PlanId,
 } from "@/lib/plans";
 
-type Step = "plan" | "gateway";
+type Step = "plan" | "invite" | "gateway";
 
 function OnboardingInner() {
   const router = useRouter();
@@ -30,6 +30,7 @@ function OnboardingInner() {
   const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [step, setStep] = useState<Step>("plan");
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
   const [gateway, setGateway] = useState<PaymentGateway | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +51,9 @@ function OnboardingInner() {
       ) {
         setSelectedPlan("pro");
         setStep("gateway");
+      } else if (searchParams.get("step") === "invite") {
+        setSelectedPlan("pro");
+        setStep("invite");
       }
       setReady(true);
     });
@@ -78,12 +82,18 @@ function OnboardingInner() {
       setError("Escolha um gateway de pagamento para continuar.");
       return;
     }
+    if (user?.plan !== "pro" && !inviteCode.trim()) {
+      setError("Informe o código de convite do Pro.");
+      setStep("invite");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
       const result = await choosePlan({
         plan: "pro",
         paymentGateway: gateway,
+        inviteCode: inviteCode.trim() || undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -102,6 +112,15 @@ function OnboardingInner() {
       void confirmFree();
       return;
     }
+    setStep("invite");
+  }
+
+  function continueInvite() {
+    if (!inviteCode.trim()) {
+      setError("Informe o código de convite.");
+      return;
+    }
+    setError("");
     setStep("gateway");
   }
 
@@ -201,8 +220,8 @@ function OnboardingInner() {
                   Plano Pro
                 </p>
                 <p className="mt-1 text-[12px] leading-relaxed text-muted">
-                  Consultório completo: pacientes ilimitados, financeiro e
-                  gateway de pagamento.
+                  Liberado por convite neste beta. Pacientes ilimitados e
+                  financeiro.
                 </p>
                 <ul className="mt-4 space-y-2 text-[12px] text-brand">
                   <li className="flex items-center gap-2">
@@ -215,7 +234,7 @@ function OnboardingInner() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="size-3.5 text-accent-deep" />
-                    Escolha do gateway
+                    Acesso por código de convite
                   </li>
                 </ul>
               </button>
@@ -231,6 +250,62 @@ function OnboardingInner() {
               </div>
             )}
           </section>
+        ) : step === "invite" ? (
+          <section className="overflow-hidden rounded-[28px] border border-line/80 bg-card/95 shadow-[0_24px_80px_rgba(20,22,26,0.1)]">
+            <div className="border-b border-line px-6 py-5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-orange">
+                Plano Pro
+              </p>
+              <h1 className="mt-1 text-xl font-extrabold tracking-tight text-brand sm:text-2xl">
+                Código de convite
+              </h1>
+              <p className="mt-1 text-[13px] text-muted">
+                O Pro ainda não tem cobrança automática. Use o código que você
+                recebeu da equipe MyHub.
+              </p>
+            </div>
+            <div className="space-y-4 p-6">
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold text-brand">
+                  Convite
+                </span>
+                <input
+                  value={inviteCode}
+                  onChange={(e) => {
+                    setInviteCode(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="Cole o código aqui"
+                  className="w-full rounded-2xl border border-line bg-bg px-4 py-3 text-[14px] text-brand outline-none focus:border-surface"
+                />
+              </label>
+              {error ? (
+                <p className="text-[12px] text-danger">{error}</p>
+              ) : null}
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-line px-6 py-4 sm:flex-row sm:justify-between">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setStep("plan");
+                  setSelectedPlan(null);
+                  setInviteCode("");
+                }}
+                className="rounded-full border border-line bg-bg px-5 py-3 text-[13px] font-semibold text-brand"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                disabled={!inviteCode.trim()}
+                onClick={continueInvite}
+                className="rounded-full bg-surface px-5 py-3 text-[13px] font-bold text-brand disabled:opacity-50"
+              >
+                Continuar
+              </button>
+            </div>
+          </section>
         ) : (
           <section className="overflow-hidden rounded-[28px] border border-line/80 bg-card/95 shadow-[0_24px_80px_rgba(20,22,26,0.1)]">
             <div className="border-b border-line px-6 py-5">
@@ -241,8 +316,8 @@ function OnboardingInner() {
                 Escolha o gateway de pagamento
               </h1>
               <p className="mt-1 text-[13px] text-muted">
-                Deixamos tudo pronto para você conectar o provedor preferido.
-                A integração das chaves pode ser feita depois.
+                Preferência de provedor para quando a cobrança estiver ativa.
+                As chaves podem ser configuradas depois.
               </p>
             </div>
 
@@ -286,9 +361,14 @@ function OnboardingInner() {
                 type="button"
                 disabled={loading}
                 onClick={() => {
-                  setStep("plan");
-                  setSelectedPlan(null);
-                  setGateway(null);
+                  if (user?.plan === "pro") {
+                    setStep("plan");
+                    setSelectedPlan(null);
+                    setGateway(null);
+                  } else {
+                    setStep("invite");
+                    setGateway(null);
+                  }
                 }}
                 className="rounded-full border border-line bg-bg px-5 py-3 text-[13px] font-semibold text-brand"
               >

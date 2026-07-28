@@ -69,16 +69,40 @@ export async function PUT(request: Request) {
     }
   }
 
+  const incomingIds = patients.map((p) => p.id);
+
   try {
+    const foreign = await prisma.patient.findFirst({
+      where: { id: { in: incomingIds }, NOT: { userId: user.id } },
+      select: { id: true },
+    });
+    if (foreign) {
+      return NextResponse.json(
+        { error: "Paciente não pertence à sua conta." },
+        { status: 400 },
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
-      await tx.patient.deleteMany({ where: { userId: user.id } });
-      if (patients.length) {
-        await tx.patient.createMany({
-          data: patients.map((p) => ({
+      await tx.patient.deleteMany({
+        where: {
+          userId: user.id,
+          ...(incomingIds.length ? { id: { notIn: incomingIds } } : {}),
+        },
+      });
+
+      for (const p of patients) {
+        await tx.patient.upsert({
+          where: { id: p.id },
+          create: {
             id: p.id,
             userId: user.id,
             ...patientWriteData(p),
-          })),
+          },
+          update: {
+            ...patientWriteData(p),
+            userId: user.id,
+          },
         });
       }
     });

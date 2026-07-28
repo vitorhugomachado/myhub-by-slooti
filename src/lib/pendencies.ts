@@ -80,7 +80,8 @@ export function pendencyHref(p: Pendency) {
   if (p.type === "prontuario") {
     return `/prontuario/novo?appointmentId=${p.appointmentId}&patient=${patient}`;
   }
-  return `/receita-saude/nova?appointmentId=${p.appointmentId}&patient=${patient}`;
+  // Receita Saúde ainda sem emissão — evita CTA falso
+  return `/receita-saude`;
 }
 
 export function getPendingForPatient(patientName: string) {

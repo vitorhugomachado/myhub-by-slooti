@@ -145,28 +145,23 @@ export const megaNavItems: MegaNavItem[] = [
     label: "Gestão",
     columns: [
       {
-        title: "Fiscal",
-        items: [
-          {
-            label: "Receita Saúde",
-            description: "Pendências e envios",
-            href: "/receita-saude",
-          },
-          {
-            label: "Nova receita",
-            description: "Gerar documento fiscal",
-            href: "/receita-saude/nova",
-          },
-        ],
-      },
-      {
         title: "Clínica",
-        highlight: true,
         items: [
           {
             label: "Dashboard",
             description: "Visão geral do dia",
             href: "/",
+          },
+        ],
+      },
+      {
+        title: "Em breve",
+        highlight: true,
+        items: [
+          {
+            label: "Receita Saúde",
+            description: "Emissão fiscal em desenvolvimento",
+            href: "#",
           },
         ],
       },
@@ -180,7 +175,6 @@ export const navItems = [
   { label: "Agenda", href: "/agenda" },
   { label: "Pacientes", href: "/pacientes" },
   { label: "Financeiro", href: "/financeiro" },
-  { label: "Receita Saúde", href: "/receita-saude" },
 ] as const;
 
 export function isActivePath(pathname: string, href: string) {

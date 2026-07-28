@@ -16,6 +16,8 @@ export type Appointment = {
   start: string;
   end: string;
   patient: string;
+  /** FK opcional para o cadastro de paciente */
+  patientId?: string;
   type: string;
   mode: "Presencial" | "Online";
   status: AppointmentStatus;

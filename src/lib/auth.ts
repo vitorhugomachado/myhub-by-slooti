@@ -123,6 +123,7 @@ export async function logout() {
 export async function choosePlan(input: {
   plan: "free" | "pro";
   paymentGateway?: string;
+  inviteCode?: string;
 }): Promise<AuthResult> {
   const res = await fetch("/api/auth/plan", {
     method: "PUT",
