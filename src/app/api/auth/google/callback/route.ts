@@ -3,6 +3,7 @@ import {
   exchangeCodeForTokens,
   isGoogleConfigured,
 } from "@/lib/google";
+import { absoluteUrl } from "@/lib/request-origin";
 
 function safeReturnTo(raw: string | null) {
   if (!raw) return "/auth/callback";
@@ -19,7 +20,7 @@ function safeReturnTo(raw: string | null) {
 
 export async function GET(request: Request) {
   if (!isGoogleConfigured()) {
-    return NextResponse.redirect(new URL("/login?google=missing", request.url));
+    return NextResponse.redirect(absoluteUrl(request, "/login?google=missing"));
   }
 
   const { searchParams } = new URL(request.url);
@@ -28,13 +29,13 @@ export async function GET(request: Request) {
   const returnTo = safeReturnTo(state);
 
   if (!code) {
-    return NextResponse.redirect(new URL("/login?google=denied", request.url));
+    return NextResponse.redirect(absoluteUrl(request, "/login?google=denied"));
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code);
 
-    const target = new URL(returnTo, request.url);
+    const target = absoluteUrl(request, returnTo);
     if (returnTo.startsWith("/auth/callback") || returnTo.startsWith("/login")) {
       target.searchParams.set("google", "ok");
     }
@@ -71,6 +72,6 @@ export async function GET(request: Request) {
 
     return response;
   } catch {
-    return NextResponse.redirect(new URL("/login?google=error", request.url));
+    return NextResponse.redirect(absoluteUrl(request, "/login?google=error"));
   }
 }
