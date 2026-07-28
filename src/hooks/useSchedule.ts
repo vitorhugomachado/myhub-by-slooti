@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DatedAppointment } from "@/lib/agenda";
 import {
   activeAppointments,
-  addAppointment,
   cancelAppointment,
   completeAppointment,
   rescheduleAppointment,
@@ -42,6 +41,23 @@ async function persistSchedule(items: DatedAppointment[]) {
   }
   window.dispatchEvent(new Event(SCHEDULE_EVENT));
   return items;
+}
+
+async function createAppointment(input: AddAppointmentInput) {
+  const res = await fetch("/api/schedule", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => null)) as {
+    error?: string;
+    item?: DatedAppointment;
+  } | null;
+  if (!res.ok || !data?.item) {
+    throw new Error(data?.error || "Falha ao salvar a agenda.");
+  }
+  return data.item;
 }
 
 export function useSchedule() {
@@ -103,26 +119,26 @@ export function useSchedule() {
   );
 
   const add = useCallback(async (input: AddAppointmentInput) => {
-    let next: DatedAppointment[] = [];
-    let previous: DatedAppointment[] = [];
+    const created = await createAppointment(input);
     setItems((prev) => {
-      previous = prev;
-      next = addAppointment(prev, input);
+      const withoutDup = prev.filter(
+        (a) =>
+          !(
+            a.date === created.date &&
+            a.start === created.start &&
+            a.patient === created.patient
+          ),
+      );
+      const next = [...withoutDup, created].sort((a, b) => {
+        const byDate = a.date.localeCompare(b.date);
+        if (byDate !== 0) return byDate;
+        return a.start.localeCompare(b.start);
+      });
+      saveSchedule(next, { silent: true });
       return next;
     });
-    try {
-      const saved = await persistSchedule(next);
-      setItems(saved);
-      return saved.find(
-        (a) =>
-          a.date === input.date &&
-          a.start === input.start &&
-          a.patient === input.patient,
-      );
-    } catch (error) {
-      setItems(previous);
-      throw error;
-    }
+    window.dispatchEvent(new Event(SCHEDULE_EVENT));
+    return created;
   }, []);
 
   const active = useMemo(() => activeAppointments(items), [items]);
