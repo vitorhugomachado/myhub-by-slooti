@@ -17,6 +17,17 @@ export function resolveAvatar(src: string | null | undefined) {
   return isDefaultAvatar(src) ? DEFAULT_AVATAR : src!;
 }
 
+/** Prefere a foto do cadastro; agenda pode ter placeholder antigo. */
+export function resolveAppointmentAvatar(
+  appointmentAvatar: string | null | undefined,
+  patientAvatar?: string | null,
+) {
+  if (patientAvatar && !isDefaultAvatar(patientAvatar)) {
+    return resolveAvatar(patientAvatar);
+  }
+  return resolveAvatar(appointmentAvatar);
+}
+
 /** Redimensiona e comprime imagem para data URL (JPEG). */
 export async function fileToAvatarDataUrl(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {

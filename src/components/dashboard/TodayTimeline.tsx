@@ -1,14 +1,15 @@
 "use client";
 
 import { Check, ChevronRight, MapPin, Video } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
+import { Avatar } from "@/components/shared/Avatar";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
 import { useAgendaClock, useAgendaToday } from "@/hooks/useAgendaClock";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
+import { resolveAppointmentAvatar } from "@/lib/avatar";
 import { needsPackageRenewal } from "@/lib/billing";
 import {
   resolveDashboardAgendaFocus,
@@ -145,11 +146,13 @@ export function TodayTimeline({
                               : "border-line bg-bg hover:border-surface hover:bg-surface-soft/60"
                     }`}
                   >
-                    <Image
-                      src={item.avatar}
+                    <Avatar
+                      src={resolveAppointmentAvatar(
+                        item.avatar,
+                        patientByName(item.patient)?.avatar,
+                      )}
                       alt={item.patient}
-                      width={36}
-                      height={36}
+                      size={36}
                       className={`size-9 shrink-0 rounded-full object-cover ${
                         isDone ? "opacity-60" : ""
                       }`}

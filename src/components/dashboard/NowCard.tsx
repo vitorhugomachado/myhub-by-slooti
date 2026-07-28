@@ -8,16 +8,17 @@ import {
   MapPin,
   Video,
 } from "lucide-react";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { FinishSessionFlow } from "@/components/dashboard/FinishSessionFlow";
 import { QuickPatientCard } from "@/components/dashboard/QuickPatientCard";
 import { RescheduleDialog } from "@/components/sessoes/SessionManageDialogs";
+import { Avatar } from "@/components/shared/Avatar";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
 import { useAgendaClock, useAgendaToday } from "@/hooks/useAgendaClock";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
+import { resolveAppointmentAvatar } from "@/lib/avatar";
 import { needsPackageRenewal } from "@/lib/billing";
 import { resolveDashboardAgendaFocus } from "@/lib/agenda";
 import { formatDelay, resolveLateQueue } from "@/lib/session-timing";
@@ -105,7 +106,9 @@ export function NowCard() {
     date: current.date,
     patientName: current.patient,
   });
-  const renew = needsPackageRenewal(patientByName(current.patient));
+  const patient = patientByName(current.patient);
+  const renew = needsPackageRenewal(patient);
+  const avatarSrc = resolveAppointmentAvatar(current.avatar, patient?.avatar);
 
   const isFinished = phase === "finished";
   const isRunning = phase === "running";
@@ -184,11 +187,10 @@ export function NowCard() {
         )}
 
         <div className="mt-4 flex items-center gap-4">
-          <Image
-            src={current.avatar}
+          <Avatar
+            src={avatarSrc}
             alt={current.patient}
-            width={56}
-            height={56}
+            size={56}
             className="size-14 shrink-0 rounded-2xl object-cover"
           />
           <div className="min-w-0">

@@ -16,11 +16,11 @@ import {
   Video,
   X,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RescheduleDialog } from "@/components/sessoes/SessionManageDialogs";
 import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
+import { Avatar } from "@/components/shared/Avatar";
 import { PaidMark } from "@/components/shared/PaidMark";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { useFinance } from "@/hooks/useFinance";
@@ -31,6 +31,7 @@ import {
   getAppointmentDate,
   type DatedAppointment,
 } from "@/lib/agenda";
+import { resolveAppointmentAvatar } from "@/lib/avatar";
 import { needsPackageRenewal } from "@/lib/billing";
 import { formatFinanceDate } from "@/lib/finance";
 import { setStoredMeetLink } from "@/lib/meet-store";
@@ -222,11 +223,10 @@ export function QuickPatientCard({
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <Image
-              src={dated.avatar}
+            <Avatar
+              src={resolveAppointmentAvatar(dated.avatar, patient?.avatar)}
               alt={displayName}
-              width={48}
-              height={48}
+              size={48}
               className="size-12 shrink-0 rounded-2xl object-cover"
             />
             <div className="min-w-0">

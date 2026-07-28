@@ -1,11 +1,12 @@
 "use client";
 
 import { MapPin, Video, X } from "lucide-react";
-import Image from "next/image";
 import { useEffect, useState } from "react";
+import { Avatar } from "@/components/shared/Avatar";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
 import { useFinance } from "@/hooks/useFinance";
+import { resolveAppointmentAvatar } from "@/lib/avatar";
 import { needsPackageRenewal } from "@/lib/billing";
 import type { DatedAppointment, LiveUpcomingDay } from "@/lib/agenda";
 
@@ -98,11 +99,13 @@ export function DayAgendaCard({
                 onClick={() => onSelectPatient(item)}
                 className="flex w-full items-center gap-3 rounded-2xl border border-line bg-bg p-2.5 text-left transition-colors hover:border-surface hover:bg-surface-soft/60"
               >
-                <Image
-                  src={item.avatar}
+                <Avatar
+                  src={resolveAppointmentAvatar(
+                    item.avatar,
+                    patientByName(item.patient)?.avatar,
+                  )}
                   alt={item.patient}
-                  width={40}
-                  height={40}
+                  size={40}
                   className="size-10 shrink-0 rounded-full object-cover"
                 />
                 <div className="min-w-0 flex-1">

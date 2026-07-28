@@ -1,7 +1,6 @@
 "use client";
 
 import { CalendarDays, CalendarPlus, MapPin, Plus, Video, X } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AddAppointmentDialog } from "@/components/sessoes/AddAppointmentDialog";
@@ -9,6 +8,7 @@ import {
   CancelSessionDialog,
   RescheduleDialog,
 } from "@/components/sessoes/SessionManageDialogs";
+import { Avatar } from "@/components/shared/Avatar";
 import { RenewalPill } from "@/components/shared/BillingBadge";
 import { PaidMark } from "@/components/shared/PaidMark";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/shared/AgendaMonthGrid";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
+import { resolveAppointmentAvatar } from "@/lib/avatar";
 import { needsPackageRenewal } from "@/lib/billing";
 import { dayAgendaHeading, type DatedAppointment } from "@/lib/agenda";
 import type { AppointmentStatus } from "@/lib/mock-data";
@@ -171,11 +172,13 @@ export function SessionsCalendar({
                       onClick={() => onSelect?.(appt)}
                       className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     >
-                      <Image
-                        src={appt.avatar}
+                      <Avatar
+                        src={resolveAppointmentAvatar(
+                          appt.avatar,
+                          patientByName(appt.patient)?.avatar,
+                        )}
                         alt={appt.patient}
-                        width={40}
-                        height={40}
+                        size={40}
                         className="size-10 shrink-0 rounded-full object-cover"
                       />
                       <div className="min-w-0">

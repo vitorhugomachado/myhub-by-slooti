@@ -19,10 +19,10 @@ import {
   UserRound,
   Video,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionPaymentPanel } from "@/components/session/SessionPaymentPanel";
+import { Avatar } from "@/components/shared/Avatar";
 import { useFinance } from "@/hooks/useFinance";
 import { useSchedule } from "@/hooks/useSchedule";
 import { useSessionReports } from "@/hooks/useSessionReports";
@@ -31,6 +31,7 @@ import {
   getAppointmentDate,
   type DatedAppointment,
 } from "@/lib/agenda";
+import { resolveAppointmentAvatar } from "@/lib/avatar";
 import { formatFinanceDate } from "@/lib/finance";
 import {
   formatDateBr,
@@ -282,11 +283,13 @@ export function SessionRoom({
         <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[320px]">
           <article className="card p-5">
             <div className="flex items-center gap-3.5">
-              <Image
-                src={patient?.avatar || appointment.avatar}
+              <Avatar
+                src={resolveAppointmentAvatar(
+                  appointment.avatar,
+                  patient?.avatar,
+                )}
                 alt={displayName}
-                width={64}
-                height={64}
+                size={64}
                 className="size-16 rounded-2xl object-cover"
               />
               <div className="min-w-0">
